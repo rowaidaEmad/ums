@@ -1,6 +1,7 @@
 run  website ->	http://localhost/ums/index.php
 Change the database->	http://localhost/phpmyadmin
-Change how pages look	Edit -> .php files
-Change login or logic	Edit -> auth.php / index.php
-Change course behavior	Edit-> admin_courses.php
-Change student enrollment	Edit-> student_courses.php
+Change how pages look	edit -> .php files
+Change login or logic	edit -> auth.php / index.php
+Change course behavior edit-> admin_courses.php
+Change student enrollment	edit-> student_courses.php
+------------------------------------------------------
