@@ -1,3 +1,6 @@
-for the run ->http://localhost/ums/index.php
-for changes in db -> http://localhost/phpmyadmin/
-----------------------------------------------
+run  website ->	http://localhost/ums/index.php
+Change the database->	http://localhost/phpmyadmin
+Change how pages look	Edit -> .php files
+Change login or logic	Edit -> auth.php / index.php
+Change course behavior	Edit-> admin_courses.php
+Change student enrollment	Edit-> student_courses.php
