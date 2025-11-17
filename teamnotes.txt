@@ -1,0 +1,3 @@
+for the run ->http://localhost/ums/index.php
+for changes in db -> http://localhost/phpmyadmin/
+----------------------------------------------
