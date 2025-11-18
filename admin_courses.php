@@ -11,12 +11,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     $title = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $professor_id = $_POST['professor_id'] !== '' ? (int)$_POST['professor_id'] : null;
+    $is_core = isset($_POST['is_core']) ? 1 : 0;
+    $prerequisites = trim($_POST['prerequisites'] ?? '');
+    $must_level = trim($_POST['must_level'] ?? '');
 
     if ($code && $title) {
         $stmt = $pdo->prepare(
-            'INSERT INTO courses (code, title, description, professor_id) VALUES (?, ?, ?, ?)'
+            'INSERT INTO courses (code, title, description, professor_id, is_core, prerequisites, must_level)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$code, $title, $description, $professor_id]);
+        $stmt->execute([$code, $title, $description, $professor_id, $is_core, $prerequisites, $must_level]);
     }
 }
 
@@ -74,6 +78,25 @@ $courses = $pdo->query(
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="mb-3 form-check">
+                <input type="checkbox" name="is_core" class="form-check-input" id="coreCheck">
+                <label class="form-check-label" for="coreCheck">Core Course</label>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Prerequisites</label>
+                <input name="prerequisites" class="form-control" placeholder="e.g., MATH101, CS100">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Required Level</label>
+                <select name="must_level" class="form-select">
+                    <option value="">-- None --</option>
+                    <option value="SP1">SP1</option>
+                    <option value="SP2">SP2</option>
+                    <option value="SP3">SP3</option>
+                    <option value="SP4">SP4</option>
+                    <option value="SP5">SP5</option>
+                </select>
+            </div>
             <button class="btn btn-success">Create Course</button>
         </form>
     </div>
@@ -86,6 +109,9 @@ $courses = $pdo->query(
                     <th>Code</th>
                     <th>Title</th>
                     <th>Professor</th>
+                    <th>Core</th>
+                    <th>Prerequisites</th>
+                    <th>Level</th>
                     <th style="width: 80px;"></th>
                 </tr>
             </thead>
@@ -95,6 +121,9 @@ $courses = $pdo->query(
                     <td><?= htmlspecialchars($c['code']) ?></td>
                     <td><?= htmlspecialchars($c['title']) ?></td>
                     <td><?= htmlspecialchars($c['professor_name'] ?? '—') ?></td>
+                    <td><?= $c['is_core'] ? 'Yes' : 'No' ?></td>
+                    <td><?= htmlspecialchars($c['prerequisites'] ?? '—') ?></td>
+                    <td><?= htmlspecialchars($c['must_level'] ?? '—') ?></td>
                     <td>
                         <form method="post" onsubmit="return confirm('Delete course?');">
                             <input type="hidden" name="action" value="delete">
