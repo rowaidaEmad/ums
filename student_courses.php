@@ -7,23 +7,32 @@ $pdo = getDB();
 $userId = $_SESSION['user']['id'];
 
 // Handle enroll
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'enroll') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
     $course_id = (int)($_POST['course_id'] ?? 0);
+
     if ($course_id) {
-        try {
+        if ($action === 'enroll') {
+            try {
+                $stmt = $pdo->prepare(
+                    'INSERT IGNORE INTO enrollments (student_id, course_id) VALUES (?, ?)'
+                );
+                $stmt->execute([$userId, $course_id]);
+            } catch (PDOException $e) {
+                // ignore duplicate
+            }
+        } elseif ($action === 'unenroll') {
             $stmt = $pdo->prepare(
-                'INSERT IGNORE INTO enrollments (student_id, course_id) VALUES (?, ?)'
+                'DELETE FROM enrollments WHERE student_id = ? AND course_id = ?'
             );
             $stmt->execute([$userId, $course_id]);
-        } catch (PDOException $e) {
-            // ignore duplicate
         }
     }
 }
 
 // All courses with info if current student is enrolled
 $courses = $pdo->prepare(
-    "SELECT c.*, u.name AS professor_name,
+    "SELECT c.*, u.name AS professor_name, u.email AS professor_email,
             EXISTS(
                 SELECT 1 FROM enrollments e WHERE e.course_id = c.id AND e.student_id = ?
             ) AS enrolled
@@ -58,7 +67,7 @@ $myCourses = $my->fetchAll();
             <th>Code</th>
             <th>Title</th>
             <th>Professor</th>
-            <th style="width: 120px;"></th>
+            <th style="width: 160px;"></th>
         </tr>
     </thead>
     <tbody>
@@ -66,9 +75,19 @@ $myCourses = $my->fetchAll();
         <tr>
             <td><?= htmlspecialchars($c['code']) ?></td>
             <td><?= htmlspecialchars($c['title']) ?></td>
-            <td><?= htmlspecialchars($c['professor_name'] ?? '—') ?></td>
+            <td>
+                <?= htmlspecialchars($c['professor_name'] ?? '—') ?>
+                <?php if (!empty($c['professor_email'])): ?>
+                    <a href="mailto:<?= htmlspecialchars($c['professor_email']) ?>">📧</a>
+                <?php endif; ?>
+            </td>
             <td>
                 <?php if ($c['enrolled']): ?>
+                    <form method="post" style="display:inline;">
+                        <input type="hidden" name="action" value="unenroll">
+                        <input type="hidden" name="course_id" value="<?= $c['id'] ?>">
+                        <button class="btn btn-sm btn-danger">Unenroll</button>
+                    </form>
                     <span class="badge bg-success">Enrolled</span>
                 <?php else: ?>
                     <form method="post">
@@ -97,7 +116,13 @@ $myCourses = $my->fetchAll();
         <tr>
             <td><?= htmlspecialchars($m['code']) ?></td>
             <td><?= htmlspecialchars($m['title']) ?></td>
-            <td><?= htmlspecialchars($m['grade'] ?? 'Not graded') ?></td>
+            <td>
+                <?php if ($m['grade'] === null): ?>
+                    <span class="badge bg-warning text-dark">Not graded</span>
+                <?php else: ?>
+                    <span class="badge bg-info"><?= htmlspecialchars($m['grade']) ?></span>
+                <?php endif; ?>
+            </td>
         </tr>
     <?php endforeach; ?>
     </tbody>
