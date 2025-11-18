@@ -4,6 +4,7 @@ require_role('admin');
 require_once 'db.php';
 
 $pdo = getDB();
+$errors = [];
 
 // Handle create new course
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create') {
@@ -15,12 +16,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     $prerequisites = trim($_POST['prerequisites'] ?? '');
     $must_level = trim($_POST['must_level'] ?? '');
 
-    if ($code && $title) {
+    if (!$code || !$title) {
+        $errors[] = "Course code and title are required.";
+    }
+
+    if (empty($errors)) {
         $stmt = $pdo->prepare(
             'INSERT INTO courses (code, title, description, professor_id, is_core, prerequisites, must_level)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+             VALUES (:code, :title, :description, :professor_id, :is_core, :prerequisites, :must_level)'
         );
-        $stmt->execute([$code, $title, $description, $professor_id, $is_core, $prerequisites, $must_level]);
+
+        $stmt->execute([
+            ':code' => $code,
+            ':title' => $title,
+            ':description' => $description,
+            ':professor_id' => $professor_id,
+            ':is_core' => $is_core,
+            ':prerequisites' => $prerequisites,
+            ':must_level' => $must_level
+        ]);
     }
 }
 
@@ -34,8 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 }
 
 // Load professors for dropdown
-$professors = $pdo->query("SELECT id, name FROM users WHERE role = 'professor' ORDER BY name")
-                  ->fetchAll();
+$professors = $pdo->query("SELECT id, name FROM users WHERE role = 'professor' ORDER BY name")->fetchAll();
 
 // Load existing courses
 $courses = $pdo->query(
@@ -53,6 +66,13 @@ $courses = $pdo->query(
 <div class="row">
     <div class="col-md-5">
         <h5>Create New Course</h5>
+
+        <?php if (!empty($errors)): ?>
+            <div class="alert alert-danger">
+                <?= implode('<br>', array_map('htmlspecialchars', $errors)) ?>
+            </div>
+        <?php endif; ?>
+
         <form method="post" class="card card-body mb-4">
             <input type="hidden" name="action" value="create">
             <div class="mb-3">
@@ -118,10 +138,10 @@ $courses = $pdo->query(
             <tbody>
             <?php foreach ($courses as $c): ?>
                 <tr>
-                    <td><?= htmlspecialchars($c['code']) ?></td>
-                    <td><?= htmlspecialchars($c['title']) ?></td>
+                    <td><?= htmlspecialchars($c['code'] ?? '—') ?></td>
+                    <td><?= htmlspecialchars($c['title'] ?? '—') ?></td>
                     <td><?= htmlspecialchars($c['professor_name'] ?? '—') ?></td>
-                    <td><?= $c['is_core'] ? 'Yes' : 'No' ?></td>
+                    <td><?= ($c['is_core'] ?? 0) ? 'Yes' : 'No' ?></td>
                     <td><?= htmlspecialchars($c['prerequisites'] ?? '—') ?></td>
                     <td><?= htmlspecialchars($c['must_level'] ?? '—') ?></td>
                     <td>
