@@ -157,5 +157,8 @@ $courses = $pdo->query(
         </table>
     </div>
 </div>
-
+<!-- Back to Dashboard Button -->
+<div class="mt-4">
+    <a href="admin_dashboard.php" class="btn btn-secondary">Back to Dashboard</a>
+</div>
 <?php include 'footer.php'; ?>

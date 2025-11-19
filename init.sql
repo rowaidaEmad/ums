@@ -51,7 +51,34 @@ INSERT INTO users (name, email, password, role) VALUES
 ('Dr. Smith', 'smith@prof.test', 'prof123', 'professor'),
 ('Dr. Jones', 'jones@prof.test', 'prof123', 'professor');
 
+ALTER TABLE courses
+ADD COLUMN is_core TINYINT(1) NOT NULL DEFAULT 0,
+ADD COLUMN prerequisites VARCHAR(255),
+ADD COLUMN must_level VARCHAR(10);
+
 -- Sample courses
 INSERT INTO courses (code, title, description, professor_id) VALUES
 ('CS101', 'Intro to Computer Science', 'Basics of CS.', 4),
 ('MATH201', 'Linear Algebra', 'Matrices and vectors.', 5);
+CREATE TABLE sections (
+id INT AUTO_INCREMENT PRIMARY KEY,
+course_id INT NOT NULL,
+section_number TINYINT NOT NULL,
+professor_id INT DEFAULT NULL,
+capacity INT NOT NULL DEFAULT 40,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+UNIQUE KEY uq_course_section (course_id, section_number),
+CONSTRAINT fk_sections_course FOREIGN KEY (course_id) REFERENCES courses(id)
+ON DELETE CASCADE ON UPDATE CASCADE,
+CONSTRAINT fk_sections_prof FOREIGN KEY (professor_id) REFERENCES users(id)
+ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+
+-- Enforce section_number 1..4 using CHECK 
+ALTER TABLE sections
+ADD CONSTRAINT chk_section_number CHECK (section_number BETWEEN 1 AND 4);
+
+ALTER TABLE courses
+ADD COLUMN room VARCHAR(50) DEFAULT NULL;
