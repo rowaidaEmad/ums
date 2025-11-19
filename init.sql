@@ -82,3 +82,9 @@ ADD CONSTRAINT chk_section_number CHECK (section_number BETWEEN 1 AND 4);
 
 ALTER TABLE courses
 ADD COLUMN room VARCHAR(50) DEFAULT NULL;
+
+ALTER TABLE enrollments
+ADD COLUMN section_id INT DEFAULT NULL AFTER course_id,
+ADD CONSTRAINT fk_enrollments_section FOREIGN KEY (section_id) REFERENCES sections(id)
+ON DELETE SET NULL ON UPDATE CASCADE,
+ADD UNIQUE KEY unique_enrollment_section (student_id, section_id);
