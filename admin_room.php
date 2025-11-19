@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'assig
     }
 }
 
-// Load courses
+// Load courses from db
 $courses = $pdo->query('SELECT id, code, title, room FROM courses ORDER BY code')->fetchAll();
 ?>
 
