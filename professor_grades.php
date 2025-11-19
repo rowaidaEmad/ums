@@ -5,7 +5,6 @@ require_once 'db.php';
 
 $pdo = getDB();
 $userId = $_SESSION['user']['id'];
-
 $course_id = (int)($_GET['course_id'] ?? 0);
 
 // Ensure this course belongs to current professor
@@ -99,6 +98,7 @@ $students = $students->fetchAll();
     </table>
 
     <button class="btn btn-primary">Save Grades</button>
+    <a href="professor_courses.php" class="btn btn-secondary">Back to My Courses</a>
 </form>
 
 <?php include 'footer.php'; ?>

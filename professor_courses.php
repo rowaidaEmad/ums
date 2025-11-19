@@ -21,42 +21,28 @@ $courses = $stmt->fetchAll();
 
 <h3>My Assigned Courses</h3>
 
-<table class="table table-bordered table-sm">
-    <thead class="table-light">
-        <tr>
-            <th>Code</th>
-            <th>Title</th>
-            <th>Description</th>
-            <th>Level</th>
-            <th>Core</th>
-            <th>Room</th>
-            <th style="width: 140px;"></th>
-        </tr>
-    </thead>
-    <tbody>
-    <?php foreach ($courses as $c): ?>
-        <tr>
-            <td><?= htmlspecialchars($c['code']) ?></td>
-            <td><?= htmlspecialchars($c['title']) ?></td>
-            <td><?= htmlspecialchars($c['description'] ?? '—') ?></td>
-            <td><?= htmlspecialchars($c['must_level'] ?? '—') ?></td>
-            <td><?= ($c['is_core'] ?? 0) ? 'Yes' : 'No' ?></td>
-            <td><?= htmlspecialchars($c['room'] ?? '—') ?></td>
-            <td>
-                <a class="btn btn-sm btn-primary"
-                   href="professor_grades.php?course_id=<?= $c['id'] ?>">
-                    View Students / Grades
-                </a>
-            </td>
-        </tr>
-    <?php endforeach; ?>
+<div style="display:flex; flex-wrap:wrap; gap:20px;">
+<?php foreach ($courses as $c): ?>
+    <div style="border:1px solid #ccc; border-radius:10px; padding:20px; width:300px; box-shadow:0 4px 6px rgba(0,0,0,0.1); background:#fff;">
+        <h5 style="margin-top:0;"><?= htmlspecialchars($c['code']) ?> - <?= htmlspecialchars($c['title']) ?></h5>
+        <p><strong>Description:</strong> <?= htmlspecialchars($c['description'] ?? '—') ?></p>
+        <p><strong>Level:</strong> <?= htmlspecialchars($c['must_level'] ?? '—') ?></p>
+        <p><strong>Core:</strong> <?= ($c['is_core'] ?? 0) ? 'Yes' : 'No' ?></p>
+        <p><strong>Room:</strong> <?= htmlspecialchars($c['room'] ?? 'Not assigned') ?></p>
+        <a href="professor_grades.php?course_id=<?= $c['id'] ?>" 
+           style="display:inline-block; padding:8px 12px; background:#007bff; color:#fff; border-radius:5px; text-decoration:none;">
+            Enter Grades
+        </a>
+    </div>
+<?php endforeach; ?>
 
-    <?php if (empty($courses)): ?>
-        <tr>
-            <td colspan="7" class="text-center">No courses assigned yet.</td>
-        </tr>
-    <?php endif; ?>
-    </tbody>
-</table>
+<?php if (empty($courses)): ?>
+    <p>No courses assigned yet.</p>
+<?php endif; ?>
+</div>
+
+<div class="mt-4">
+    <a href="professor_dashboard.php" class="btn btn-secondary">Back to Dashboard</a>
+</div>
 
 <?php include 'footer.php'; ?>
