@@ -157,7 +157,6 @@ if ($selectedCourseId) {
 
             <div class="d-flex justify-content-between mt-3">
                 <button type="submit" class="btn btn-success">Create Section</button>
-                <button type="submit" name="save_exit" value="1" class="btn btn-primary">Save & Exit</button>
             </div>
         </form>
     </div>
