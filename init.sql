@@ -88,3 +88,13 @@ ADD COLUMN section_id INT DEFAULT NULL AFTER course_id,
 ADD CONSTRAINT fk_enrollments_section FOREIGN KEY (section_id) REFERENCES sections(id)
 ON DELETE SET NULL ON UPDATE CASCADE,
 ADD UNIQUE KEY unique_enrollment_section (student_id, section_id);
+
+ALTER TABLE enrollments
+ADD COLUMN section_id INT NOT NULL,
+ADD CONSTRAINT fk_enroll_section FOREIGN KEY (section_id)
+REFERENCES sections(id)
+ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE enrollments
+ADD UNIQUE KEY unique_student_course (student_id, course_id);
+
