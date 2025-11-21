@@ -46,11 +46,18 @@ CREATE TABLE grades (
 
 -- Sample users
 INSERT INTO users (name, email, password, role) VALUES
-('System Admin', 'admin@ums.test', 'admin123', 'admin'),
-('Alice Student', 'alice@student.test', 'student123', 'student'),
-('Bob Student', 'bob@student.test', 'student123', 'student'),
-('Dr. Smith', 'smith@prof.test', 'prof123', 'professor'),
-('Dr. Jones', 'jones@prof.test', 'prof123', 'professor');
+('System Admin', 'admin@ums.edu', 'admin123', 'admin'),
+('Somaya Ahmed ', 'somaya@student.edu', 'student123', 'student'),
+('Habiba Sherif', 'habiba@student.edu', 'student123', 'student'),
+('Rowaida Emad', 'rowaida@student.edu', 'student123', 'student'),
+('Ahmed Sherif', 'ahmed@student.edu', 'student123', 'student'),
+('Rawan Hany', 'rawan@student.edu', 'student123', 'student'),
+('Dr. Mohamed Hassan El Gazzar', 'Drmohamed@prof.edu', 'prof123', 'professor'),
+('Eng. Abdelrahman Salah', 'Engabdelrahman@prof.edu', 'prof123', 'professor'),
+('Dr. Mahmoud Khalil', 'drKhalil@prof.edu', 'prof123', 'professor'),
+('Dr. Ayman Bahaa', 'drayman@prof.edu', 'prof123', 'professor'),
+('Dr. Nabil hamed', 'drnabil@prof.edu', 'prof123', 'professor'),
+('Dr. Sherif hamed', 'drSherif@prof.edu', 'prof123', 'professor');
 
 -- Extra columns for courses (core, prerequisites, required level)
 ALTER TABLE courses
@@ -60,8 +67,10 @@ ALTER TABLE courses
 
 -- Sample courses
 INSERT INTO courses (code, title, description, professor_id) VALUES
-('CS101', 'Intro to Computer Science', 'Basics of CS.', 4),
-('MATH201', 'Linear Algebra', 'Matrices and vectors.', 5);
+('CS223', 'Agile Software Engineering', 'Software engineering', 7),
+('CSE351', 'Computer networks', 'layers of internet', 10),
+('CSE211', 'Intro to Embedded', 'ARM microprocessor', 12),
+('EMP119', 'Engineering Economy', 'Time value of money and economic comparisons', 11);
 
 -- Sections table
 CREATE TABLE sections (
