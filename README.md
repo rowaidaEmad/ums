@@ -88,7 +88,7 @@ The file **`init.sql`** creates the entire system database.
 `drayman@prof.edu`, `drnabil@prof.edu`, `drSherif@prof.edu`
 
 #### **Students** (Password: `student123`)
-`sommaya@student.edu`, `habiba@student.edu`, `rowaida@student.edu`,  
+`somaya@student.edu`, `habiba@student.edu`, `rowaida@student.edu`,  
 `ahmed@student.edu`, `rawan@student.edu`
 
 ---
