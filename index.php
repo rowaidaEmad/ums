@@ -45,12 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input name="password" type="password" class="form-control" required>
             </div>
             <button class="btn btn-primary w-100">Login</button>
-            <div class="mt-3 small text-muted">
-                Example accounts:<br>
-                admin@ums.test / admin123<br>
-                alice@student.test / student123<br>
-                smith@prof.test / prof123
-            </div>
+           
         </form>
     </div>
 </div>
