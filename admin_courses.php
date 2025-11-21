@@ -6,6 +6,13 @@ require_once 'db.php';
 $pdo = getDB();
 $errors = [];
 
+// Load professors for dropdown (needed before the form)
+$professors = $pdo->query("SELECT id, name FROM users WHERE role = 'professor' ORDER BY name")->fetchAll();
+
+// Load existing courses (needed for prerequisites multi-select)
+// We select only code and title here for the dropdown; we also retrieve full rows later for the table.
+$courseOptions = $pdo->query("SELECT id, code, title FROM courses ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);
+
 // Handle create new course
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create') {
     $code = trim($_POST['code'] ?? '');
@@ -13,11 +20,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     $description = trim($_POST['description'] ?? '');
     $professor_id = $_POST['professor_id'] !== '' ? (int)$_POST['professor_id'] : null;
     $is_core = isset($_POST['is_core']) ? 1 : 0;
-    $prerequisites = trim($_POST['prerequisites'] ?? '');
     $must_level = trim($_POST['must_level'] ?? '');
 
-    if (!$code || !$title) {
+    // Handle prerequisites: could be posted as array (multi-select) or single comma-separated string
+    if (isset($_POST['prerequisites']) && is_array($_POST['prerequisites'])) {
+        // from multi-select: values should be course codes
+        $pr_list = array_map('trim', $_POST['prerequisites']);
+    } else {
+        // fallback for older clients: free-text input
+        $pr_raw = trim($_POST['prerequisites'] ?? '');
+        if ($pr_raw === '') {
+            $pr_list = [];
+        } else {
+            // split on commas, semicolons or whitespace
+            $pr_list = array_filter(array_map('trim', preg_split('/[,\s;]+/', $pr_raw)));
+        }
+    }
+
+    if ($code === '' || $title === '') {
         $errors[] = "Course code and title are required.";
+    }
+
+    // Prevent listing itself as prerequisite (case-insensitive)
+    foreach ($pr_list as $pr) {
+        if (strcasecmp($pr, $code) === 0) {
+            $errors[] = "A course cannot list itself as a prerequisite.";
+            break;
+        }
+    }
+
+    // Normalize prerequisites to a comma-separated string for storage (dedupe case-insensitively)
+    $prerequisites = '';
+    if (!empty($pr_list)) {
+        $normalized = [];
+        foreach ($pr_list as $p) {
+            $p = trim($p);
+            if ($p === '') continue;
+            $normalized[strtoupper($p)] = $p; // dedupe case-insensitively
+        }
+        $prerequisites = implode(', ', array_values($normalized));
+    }
+
+    // Check for duplicate course code before attempting insert
+    if (empty($errors)) {
+        $check = $pdo->prepare("SELECT COUNT(*) FROM courses WHERE code = ?");
+        $check->execute([$code]);
+        if ($check->fetchColumn() > 0) {
+            $errors[] = "A course with code {$code} already exists.";
+        }
     }
 
     if (empty($errors)) {
@@ -35,6 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             ':prerequisites' => $prerequisites,
             ':must_level' => $must_level
         ]);
+
+        // Reload course options so the newly created course appears immediately in the prerequisites list
+        $courseOptions = $pdo->query("SELECT id, code, title FROM courses ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 
@@ -44,19 +97,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     if ($id) {
         $stmt = $pdo->prepare('DELETE FROM courses WHERE id = ?');
         $stmt->execute([$id]);
+
+        // reload course options after deletion
+        $courseOptions = $pdo->query("SELECT id, code, title FROM courses ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 
-// Load professors for dropdown
-$professors = $pdo->query("SELECT id, name FROM users WHERE role = 'professor' ORDER BY name")->fetchAll();
-
-// Load existing courses
+// Load existing courses (full rows) for the table view
 $courses = $pdo->query(
     "SELECT c.*, u.name AS professor_name
      FROM courses c
      LEFT JOIN users u ON c.professor_id = u.id
      ORDER BY c.code"
-)->fetchAll();
+)->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <?php include 'header.php'; ?>
@@ -92,7 +145,7 @@ $courses = $pdo->query(
                 <select name="professor_id" class="form-select">
                     <option value="">-- Unassigned --</option>
                     <?php foreach ($professors as $p): ?>
-                        <option value="<?= $p['id'] ?>">
+                        <option value="<?= (int)$p['id'] ?>">
                             <?= htmlspecialchars($p['name']) ?>
                         </option>
                     <?php endforeach; ?>
@@ -102,10 +155,22 @@ $courses = $pdo->query(
                 <input type="checkbox" name="is_core" class="form-check-input" id="coreCheck">
                 <label class="form-check-label" for="coreCheck">Core Course</label>
             </div>
+
+            <!-- Prerequisites multi-select dropdown populated from existing courses -->
             <div class="mb-3">
                 <label class="form-label">Prerequisites</label>
-                <input name="prerequisites" class="form-control" placeholder="e.g., MATH101, CS100">
+                <select name="prerequisites[]" class="form-select" multiple size="6">
+                    <?php foreach ($courseOptions as $option): ?>
+                        <option value="<?= htmlspecialchars($option['code']) ?>">
+                            <?= htmlspecialchars($option['code'] . ' — ' . $option['title']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="form-text text-muted">
+                    Hold Ctrl (Cmd) to select multiple. (You cannot select the same code as the course you're creating.)
+                </small>
             </div>
+
             <div class="mb-3">
                 <label class="form-label">Required Level</label>
                 <select name="must_level" class="form-select">
@@ -147,7 +212,7 @@ $courses = $pdo->query(
                     <td>
                         <form method="post" onsubmit="return confirm('Delete course?');">
                             <input type="hidden" name="action" value="delete">
-                            <input type="hidden" name="id" value="<?= $c['id'] ?>">
+                            <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
                             <button class="btn btn-sm btn-danger">Del</button>
                         </form>
                     </td>
