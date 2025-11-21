@@ -1,129 +1,131 @@
-#  University Management System (UMS)
+# University Management System (UMS)
 
-A simple web-based **University Management System** built with **PHP** and **MySQL**.
+A complete PHP + MySQL web-based **University Management System** supporting three user roles:
 
-It supports three roles:
+- **Admin**
+- **Professor**
+- **Student**
 
-- **Admin** – manages courses, sections, and room assignments  
-- **Professor** – views assigned courses and manages student grades  
-- **Student** – registers for courses, views enrollments, and checks grades  
-
-This project is intended for **learning / coursework** and is **not production-ready** (e.g., passwords are stored in plain text).
+The system allows course management, section assignments, room scheduling, student enrollment, grade submissions, and more. This project is created for learning, assignments, and academic demonstration.
 
 ---
 
 ## 📑 Table of Contents
 
-- [Features](#-features)
-  - [Admin](#admin-features)
-  - [Professor](#professor-features)
-  - [Student](#student-features)
-- [Technology Stack](#-technology-stack)
-- [Project Structure](#-project-structure)
-- [Database Schema](#-database-schema)
-  - [Main Tables](#main-tables)
-  - [Seed Data (Demo Accounts)](#seed-data-demo-accounts)
-- [Installation & Setup](#-installation--setup)
-  - [1. Requirements](#1-requirements)
-  - [2. Database Setup](#2-database-setup)
-  - [3. Configure the Application](#3-configure-the-application)
-  - [4. Run the Application](#4-run-the-application)
-- [Usage](#-usage)
-  - [Admin Workflow](#admin-workflow)
-  - [Professor Workflow](#professor-workflow)
-  - [Student Workflow](#student-workflow)
-- [Tests](#-tests)
-- [Security Notes & Limitations](#-security-notes--limitations)
-- [Future Improvements](#-future-improvements)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Database Schema](#database-schema)
+- [Installation & Setup](#installation--setup)
+
 
 ---
 
 ##  Features
 
-### Admin Features
+### **Admin Features**
+- Manage Courses  
+  - Add / Edit / Delete  
+  - Assign professors  
+  - Add prerequisites  
+  - Mark course as core or level-based  
+- Manage Sections  
+  - Create up to 4 sections per course  
+  - Set section capacity  
+  - Assign section-specific professor  
+- Assign Rooms for courses  
+- Full dashboard with shortcuts  
 
-Available through:
+### **Professor Features**
+- View assigned courses  
+- Manage grades for students enrolled in their courses  
+- Update grades any time  
+- Dashboard with course shortcuts  
 
-- `admin_dashboard.php`
-- `admin_courses.php`
-- `admin_sections.php`
-- `admin_room.php`
-
-**Admin can:**
-
-- View an **Admin Dashboard** with quick-access cards.
-- **Manage courses**:
-  - Create / edit / delete courses.
-  - Assign a professor to each course.
-  - Mark courses as **core** (`is_core`).
-  - Add optional **prerequisites** and **required level** (`must_level`).
-- **Manage sections**:
-  - Create sections for a course (section numbers `1–4`).
-  - Set a **capacity** per section (max number of students).
-  - Optionally override which professor is teaching a section.
-  - Delete sections.
-- **Assign rooms**:
-  - Link a `room` to a course (e.g., room 101, 202, etc.).
-
----
-
-### Professor Features
-
-Available through:
-
-- `professor_dashboard.php`
-- `professor_courses.php`
-- `professor_grades.php`
-
-**Professor can:**
-
-- View a **Professor Dashboard** with a shortcut to:
-  - **My Courses** – list of all courses assigned to the logged-in professor.
-- From the **courses page**:
-  - See course **code, title, description, level, core flag, and room**.
-  - Navigate to manage **grades** for a course.
-- From the **grades page** (`professor_grades.php`):
-  - View all students enrolled in a course.
-  - See each student’s **name** and **current grade** (if any).
-  - Enter or update grades for each student (grades stored in `grades` table).
-  - Grades are stored per **enrollment**, not per user directly.
+### **Student Features**
+- View available courses & free seats  
+- Register in course sections  
+- Unregister anytime  
+- View grades  
+- Dashboard with course & registration tools  
 
 ---
 
-### Student Features
+## Technology Stack
 
-Available through:
-
-- `student_dashboard.php`
-- `student_register.php`
-- `student_courses.php`
-
-**Student can:**
-
-- View a **Student Dashboard** with:
-  - Card for **Course Registration** (`student_register.php`)
-  - Card for **My Courses / Grades** (`student_courses.php`)
-- On **Course Registration** (`student_register.php`):
-  - See all available **courses**.
-  - See all **sections** for each course.
-  - See **current occupancy vs capacity** per section.
-  - Enroll in a section of a course (if:
-    - Not already enrolled in that course, and  
-    - Section is not full).
-  - Unenroll from a course.
-- On **My Courses / Grades** (`student_courses.php`):
-  - See all courses/sections the student is enrolled in.
-  - See assigned professor and grade (or “Not graded” if none yet).
+| Component     | Technology |
+|--------------|------------|
+| Backend      | PHP (Native) |
+| Frontend     | HTML, CSS, Bootstrap |
+| Database     | MySQL |
+| Testing      | PHPUnit, Codeception |
+| Authentication | Session-based |
 
 ---
 
-##  Technology Stack
-
-- **Language:** PHP (pure PHP, no framework)
-- **Server:** Apache (e.g., XAMPP, WAMP, LAMP)
-- **Database:** MySQL
-- **Frontend:** HTML5, CSS, [Bootstrap 5](https://getbootstrap.com/)
-- **Testing:** PHPUnit, Codeception (configured via `composer.json`)
 
 ---
+
+## Database Schema
+
+The file **`init.sql`** creates the entire system database.
+
+### **Main Tables**
+- `users` – all system accounts  
+- `courses` – available courses  
+- `sections` – course sections (1–4)  
+- `enrollments` – student registrations  
+- `grades` – grades linked to enrollments  
+
+### **Demo Accounts (from init.sql)**
+
+#### **Admin**
+| Email | Password |
+|-------|----------|
+| admin@ums.edu | admin123 |
+
+#### **Professors** (Password: `prof123`)
+`Drmohamed@prof.edu`, `Engabdelrahman@prof.edu`, `drKhalil@prof.edu`,  
+`drayman@prof.edu`, `drnabil@prof.edu`, `drSherif@prof.edu`
+
+#### **Students** (Password: `student123`)
+`sommaya@student.edu`, `habiba@student.edu`, `rowaida@student.edu`,  
+`ahmed@student.edu`, `rawan@student.edu`
+
+---
+
+## 🛠 Installation & Setup
+
+### **1. Requirements**
+- PHP 7.4+
+- MySQL 5.7+  
+- Apache server (XAMPP / WAMP / LAMP)
+- Composer (optional for testing)
+
+---
+
+### **2. Database Setup**
+1. Open phpMyAdmin  
+2. Import `init.sql`  
+3. Confirm tables are created (`users`, `courses`, `sections`, `enrollments`, `grades`, etc.)
+
+---
+
+### **3. To Run aplication**
+1. install XAMPP (Windows)
+2. Start Apache + MySQL, then open in browser : http://localhost/ums/index.php
+3. open http://localhost/phpmyadmin to see live changes on data base
+4. creat new data base named ums (only first time you open the project at your local machine )
+5. import init.sql file (only first time you open the project at your local machine )
+6. Login using any of the demo accounts listed above.
+
+### **4. Configure Database**
+Edit `config.php`:
+
+```php
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'ums');
+define('DB_USER', 'root');
+define('DB_PASS', '')
+
+
 
