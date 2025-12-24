@@ -1,106 +1,97 @@
--- Create database
-CREATE DATABASE IF NOT EXISTS ums CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE ums;
+-- =====================================================
+-- Create Database
+-- =====================================================
+CREATE DATABASE IF NOT EXISTS ums_eav
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
 
--- Users table: admin, students, professors
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(100) NOT NULL,
-    role ENUM('admin', 'student', 'professor') NOT NULL
+USE ums_eav;
+
+-- =====================================================
+-- 1. ENTITY TABLE
+-- =====================================================
+CREATE TABLE entities (
+    entity_id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_type ENUM('user', 'course', 'section', 'enrollment') NOT NULL
 );
 
--- Courses offered by the university
-CREATE TABLE courses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(20) NOT NULL UNIQUE,
-    title VARCHAR(150) NOT NULL,
-    description TEXT,
-    professor_id INT,
-    FOREIGN KEY (professor_id) REFERENCES users(id)
-        ON DELETE SET NULL ON UPDATE CASCADE
+-- =====================================================
+-- 2. ATTRIBUTE DEFINITIONS
+-- =====================================================
+CREATE TABLE attributes (
+    attribute_id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_type ENUM('user', 'course', 'section', 'enrollment') NOT NULL,
+    attribute_name VARCHAR(50) NOT NULL,
+    data_type ENUM('string', 'int', 'boolean') NOT NULL,
+    UNIQUE KEY uq_entity_attr_name (entity_type, attribute_name)
 );
 
--- Student course registrations
+-- =====================================================
+-- 3. ATTRIBUTE VALUES (EAV CORE)
+-- =====================================================
+CREATE TABLE values_eav (
+    value_id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_id INT NOT NULL,
+    attribute_id INT NOT NULL,
+    value_string VARCHAR(255),
+    value_int INT,
+    value_boolean TINYINT(1),
+    FOREIGN KEY (entity_id) REFERENCES entities(entity_id) ON DELETE CASCADE,
+    FOREIGN KEY (attribute_id) REFERENCES attributes(attribute_id) ON DELETE CASCADE,
+    UNIQUE KEY uq_entity_attribute (entity_id, attribute_id)
+);
+
+-- =====================================================
+-- 4. RELATIONSHIP TABLES
+-- =====================================================
+
+-- Sections belong to Courses
+CREATE TABLE course_sections (
+    section_entity_id INT PRIMARY KEY,
+    course_entity_id INT NOT NULL,
+    FOREIGN KEY (section_entity_id) REFERENCES entities(entity_id),
+    FOREIGN KEY (course_entity_id) REFERENCES entities(entity_id)
+);
+
+-- Enrollments (Student ↔ Section)
 CREATE TABLE enrollments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    student_id INT NOT NULL,
-    course_id INT NOT NULL,
-    -- This enforces: one section per course per student
-    UNIQUE KEY unique_enrollment (student_id, course_id),
-    FOREIGN KEY (student_id) REFERENCES users(id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (course_id) REFERENCES courses(id)
-        ON DELETE CASCADE ON UPDATE CASCADE
+    enrollment_entity_id INT PRIMARY KEY,
+    student_entity_id INT NOT NULL,
+    section_entity_id INT NOT NULL,
+    UNIQUE KEY uq_student_section (student_entity_id, section_entity_id),
+    FOREIGN KEY (enrollment_entity_id) REFERENCES entities(entity_id),
+    FOREIGN KEY (student_entity_id) REFERENCES entities(entity_id),
+    FOREIGN KEY (section_entity_id) REFERENCES entities(entity_id)
 );
 
--- Grades per enrollment
-CREATE TABLE grades (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    enrollment_id INT NOT NULL UNIQUE,
-    grade VARCHAR(5),
-    FOREIGN KEY (enrollment_id) REFERENCES enrollments(id)
-        ON DELETE CASCADE ON UPDATE CASCADE
-);
+-- =====================================================
+-- 5. ATTRIBUTE SETUP
+-- =====================================================
 
--- Sample users
-INSERT INTO users (name, email, password, role) VALUES
-('System Admin', 'admin@ums.edu', 'admin123', 'admin'),
-('Somaya Ahmed ', 'somaya@student.edu', 'student123', 'student'),
-('Habiba Sherif', 'habiba@student.edu', 'student123', 'student'),
-('Rowaida Emad', 'rowaida@student.edu', 'student123', 'student'),
-('Ahmed Sherif', 'ahmed@student.edu', 'student123', 'student'),
-('Rawan Hany', 'rawan@student.edu', 'student123', 'student'),
-('Dr. Mohamed Hassan El Gazzar', 'Drmohamed@prof.edu', 'prof123', 'professor'),
-('Eng. Abdelrahman Salah', 'Engabdelrahman@prof.edu', 'prof123', 'professor'),
-('Dr. Mahmoud Khalil', 'drKhalil@prof.edu', 'prof123', 'professor'),
-('Dr. Ayman Bahaa', 'drayman@prof.edu', 'prof123', 'professor'),
-('Dr. Nabil hamed', 'drnabil@prof.edu', 'prof123', 'professor'),
-('Dr. Sherif hamed', 'drSherif@prof.edu', 'prof123', 'professor');
+-- USER ATTRIBUTES
+INSERT INTO attributes (entity_type, attribute_name, data_type) VALUES
+('user', 'name', 'string'),
+('user', 'email', 'string'),
+('user', 'password', 'string'),
+('user', 'role', 'string');
 
--- Extra columns for courses (core, prerequisites, required level)
-ALTER TABLE courses
-    ADD COLUMN is_core TINYINT(1) NOT NULL DEFAULT 0,
-    ADD COLUMN prerequisites VARCHAR(255),
-    ADD COLUMN must_level VARCHAR(10);
+-- COURSE ATTRIBUTES
+INSERT INTO attributes (entity_type, attribute_name, data_type) VALUES
+('course', 'code', 'string'),
+('course', 'title', 'string'),
+('course', 'description', 'string'),
+('course', 'is_core', 'boolean'),
+('course', 'room', 'string'),
+('course', 'must_level', 'string'),
+('course', 'professor_id', 'int');
 
--- Sample courses
-INSERT INTO courses (code, title, description, professor_id) VALUES
-('CS223', 'Agile Software Engineering', 'Software engineering', 7),
-('CSE351', 'Computer networks', 'layers of internet', 10),
-('CSE211', 'Intro to Embedded', 'ARM microprocessor', 12),
-('EMP119', 'Engineering Economy', 'Time value of money and economic comparisons', 11);
+-- SECTION ATTRIBUTES
+INSERT INTO attributes (entity_type, attribute_name, data_type) VALUES
+('section', 'section_number', 'int'),
+('section', 'capacity', 'int'),
+('section', 'professor_id', 'int');
 
--- Sections table
-CREATE TABLE sections (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    course_id INT NOT NULL,
-    section_number TINYINT NOT NULL,
-    professor_id INT DEFAULT NULL,
-    capacity INT NOT NULL DEFAULT 40,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_course_section (course_id, section_number),
-    CONSTRAINT fk_sections_course FOREIGN KEY (course_id) REFERENCES courses(id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_sections_prof FOREIGN KEY (professor_id) REFERENCES users(id)
-        ON DELETE SET NULL ON UPDATE CASCADE
-);
+-- ENROLLMENT ATTRIBUTES
+INSERT INTO attributes (entity_type, attribute_name, data_type) VALUES
+('enrollment', 'grade', 'string');
 
--- Enforce section_number between 1 and 4
-ALTER TABLE sections
-    ADD CONSTRAINT chk_section_number CHECK (section_number BETWEEN 1 AND 4);
-
--- Room column for courses (used by admin_room.php)
-ALTER TABLE courses
-    ADD COLUMN room VARCHAR(50) DEFAULT NULL;
-
--- Add section_id to enrollments and link to sections
-ALTER TABLE enrollments
-    ADD COLUMN section_id INT NOT NULL AFTER course_id,
-    ADD CONSTRAINT fk_enroll_section FOREIGN KEY (section_id)
-        REFERENCES sections(id)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-    -- This prevents enrolling twice in the same section
-    ADD UNIQUE KEY unique_enrollment_section (student_id, section_id);
