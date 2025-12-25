@@ -2,6 +2,7 @@
 require_once 'auth.php';
 require_role('admin');
 require_once 'db.php';
+require_once 'eav.php';
 
 $pdo = getDB();
 $errors = [];
@@ -17,9 +18,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'assig
     } elseif (!is_numeric($room) || $room < 100 || $room > 900) {
         $errors[] = "Room number must be between 100 and 900.";
     } else {
-        $stmt = $pdo->prepare('UPDATE courses SET room = ? WHERE id = ?');
-        $stmt->execute([$room, $course_id]);
-        $success = "Room assigned successfully.";
+        try {
+            eav_set($course_id, 'course', 'room', $room);
+            $success = "Room assigned successfully.";
+        } catch (Throwable $t) {
+            $errors[] = "Error: " . $t->getMessage();
+        }
     }
 }
 

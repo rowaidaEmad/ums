@@ -2,6 +2,7 @@
 require_once 'auth.php';
 require_role('professor');
 require_once 'db.php';
+require_once 'eav.php';
 
 $pdo = getDB();
 $userId = $_SESSION['user']['id'];
@@ -22,9 +23,10 @@ if (!$course) {
 
 // Save grades
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    foreach ($_POST['grades'] ?? [] as $enrollment_id => $grade) {
-        $enrollment_id = (int)$enrollment_id;
-        $grade = trim($grade);
+    try {
+        foreach ($_POST['grades'] ?? [] as $enrollment_id => $grade) {
+            $enrollment_id = (int)$enrollment_id;
+            $grade = trim($grade);
 
         // Only update if enrollment belongs to this course
         $check = $pdo->prepare(
@@ -32,22 +34,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         $check->execute([$enrollment_id, $course_id]);
 
-        if ($check->fetch()) {
-            // upsert grade
-            $exists = $pdo->prepare(
-                "SELECT id FROM grades WHERE enrollment_id = ?"
-            );
-            $exists->execute([$enrollment_id]);
-            if ($row = $exists->fetch()) {
-                $upd = $pdo->prepare("UPDATE grades SET grade = ? WHERE id = ?");
-                $upd->execute([$grade, $row['id']]);
-            } else {
-                $ins = $pdo->prepare(
-                    "INSERT INTO grades (enrollment_id, grade) VALUES (?, ?)"
-                );
-                $ins->execute([$enrollment_id, $grade]);
+            if ($check->fetch()) {
+                // Save grade as an EAV attribute on the enrollment entity
+                eav_set($enrollment_id, 'enrollment', 'grade', $grade);
             }
         }
+    } catch (Throwable $e) {
+        // Keep behavior non-fatal: show error as plain text (similar to other pages)
+        $error = $e->getMessage();
     }
 }
 
@@ -68,6 +62,10 @@ $students = $students->fetchAll();
 ?>
 
 <?php include 'header.php'; ?>
+
+<?php if (!empty($error)): ?>
+    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+<?php endif; ?>
 
 <h3>Grades for <?= htmlspecialchars($course['code'] . ' - ' . $course['title']) ?></h3>
 

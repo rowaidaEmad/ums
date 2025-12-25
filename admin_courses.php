@@ -2,6 +2,7 @@
 require_once 'auth.php';
 require_role('admin');
 require_once 'db.php';
+require_once 'eav.php';
 
 $pdo = getDB();
 $errors = [];
@@ -61,30 +62,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $prerequisites = implode(', ', array_values($normalized));
     }
 
-    // Check for duplicate course code before attempting insert
-    if (empty($errors)) {
-        $check = $pdo->prepare("SELECT COUNT(*) FROM courses WHERE code = ?");
-        $check->execute([$code]);
-        if ($check->fetchColumn() > 0) {
-            $errors[] = "A course with code {$code} already exists.";
-        }
+    // Check for duplicate course code (pure EAV: enforced in code)
+    if (empty($errors) && eav_course_code_exists($code)) {
+        $errors[] = "A course with code {$code} already exists.";
     }
 
     if (empty($errors)) {
-        $stmt = $pdo->prepare(
-            'INSERT INTO courses (code, title, description, professor_id, is_core, prerequisites, must_level)
-             VALUES (:code, :title, :description, :professor_id, :is_core, :prerequisites, :must_level)'
-        );
+        $pdo->beginTransaction();
+        try {
+            $courseId = eav_create_entity('course');
+            eav_set($courseId, 'course', 'code', $code);
+            eav_set($courseId, 'course', 'title', $title);
+            eav_set($courseId, 'course', 'description', $description);
+            if ($professor_id !== null) eav_set($courseId, 'course', 'professor_id', $professor_id);
+            eav_set($courseId, 'course', 'is_core', (int)$is_core);
+            if ($prerequisites !== '') eav_set($courseId, 'course', 'prerequisites', $prerequisites);
+            if ($must_level !== '') eav_set($courseId, 'course', 'must_level', $must_level);
 
-        $stmt->execute([
-            ':code' => $code,
-            ':title' => $title,
-            ':description' => $description,
-            ':professor_id' => $professor_id,
-            ':is_core' => $is_core,
-            ':prerequisites' => $prerequisites,
-            ':must_level' => $must_level
-        ]);
+            $pdo->commit();
+        } catch (Throwable $t) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $errors[] = "Error: " . $t->getMessage();
+        }
 
         // Reload course options so the newly created course appears immediately in the prerequisites list
         $courseOptions = $pdo->query("SELECT id, code, title FROM courses ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);
@@ -95,8 +94,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
     $id = (int)($_POST['id'] ?? 0);
     if ($id) {
-        $stmt = $pdo->prepare('DELETE FROM courses WHERE id = ?');
-        $stmt->execute([$id]);
+        $pdo->beginTransaction();
+        try {
+            // Pure EAV: manual cascades
+            eav_delete_sections_by_course($id);
+            eav_delete_enrollments_by_course($id);
+            eav_delete_entity($id);
+            $pdo->commit();
+        } catch (Throwable $t) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $errors[] = "Error: " . $t->getMessage();
+        }
 
         // reload course options after deletion
         $courseOptions = $pdo->query("SELECT id, code, title FROM courses ORDER BY code")->fetchAll(PDO::FETCH_ASSOC);

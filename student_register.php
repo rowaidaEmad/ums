@@ -2,6 +2,7 @@
 require_once 'auth.php';
 require_role('student');
 require_once 'db.php';
+require_once 'eav.php';
 
 $pdo = getDB();
 $userId = $_SESSION['user']['id'];
@@ -25,23 +26,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'enroll' && $course_id && $section_id) {
 
         try {
-            // Check if already enrolled in this course
-            $q = $pdo->prepare("SELECT id FROM enrollments WHERE student_id = ? AND course_id = ?");
-            $q->execute([$userId, $course_id]);
-
-            if ($q->fetch()) {
+            // Check if already enrolled in this course (pure EAV)
+            if (eav_find_enrollment_id($userId, $course_id) !== null) {
                 $flash['error'] = "You are already enrolled in this course.";
             } else {
 
                 $pdo->beginTransaction();
 
-                // Lock selected section for update
-                $sec = $pdo->prepare("
-                    SELECT id, capacity,
-                        (SELECT COUNT(*) FROM enrollments WHERE section_id = ?) AS enrolled_count
-                    FROM sections WHERE id = ? FOR UPDATE
-                ");
-                $sec->execute([$section_id, $section_id]);
+                // Lock selected section entity row for update (pure EAV)
+                $lock = $pdo->prepare("SELECT id FROM entities WHERE id = ? AND entity_type = 'section' FOR UPDATE");
+                $lock->execute([$section_id]);
+                $locked = $lock->fetch(PDO::FETCH_ASSOC);
+
+                // Load section data from the compatibility view
+                $sec = $pdo->prepare("SELECT id, course_id, capacity FROM sections WHERE id = ?");
+                $sec->execute([$section_id]);
                 $section = $sec->fetch(PDO::FETCH_ASSOC);
 
                 if (!$section) {
@@ -49,20 +48,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flash['error'] = "Section not found.";
                 } else {
 
-                    if ($section['enrolled_count'] >= $section['capacity']) {
+                    // Ensure section belongs to chosen course (UI already enforces this)
+                    if ((int)$section['course_id'] !== (int)$course_id) {
+                        $pdo->rollBack();
+                        $flash['error'] = "Section not found.";
+                    } else {
+
+                    $enrolled_count = eav_count_enrollments_for_section($section_id);
+                    if ($enrolled_count >= (int)$section['capacity']) {
                         $pdo->rollBack();
                         $flash['error'] = "This section is already full.";
                     } else {
-                        $ins = $pdo->prepare("INSERT INTO enrollments (student_id, course_id, section_id) VALUES (?,?,?)");
-                        $ins->execute([$userId, $course_id, $section_id]);
+                        // Create enrollment as an EAV entity
+                        $enrollmentId = eav_create_entity('enrollment');
+                        eav_set($enrollmentId, 'enrollment', 'student_id', $userId);
+                        eav_set($enrollmentId, 'enrollment', 'course_id', $course_id);
+                        eav_set($enrollmentId, 'enrollment', 'section_id', $section_id);
 
                         $pdo->commit();
                         $flash['success'] = "Enrollment successful!";
                     }
+                    }
                 }
             }
 
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $flash['error'] = "Error: " . $e->getMessage();
         }
@@ -77,10 +87,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'unenroll' && $course_id) {
 
         try {
-            $del = $pdo->prepare("DELETE FROM enrollments WHERE student_id = ? AND course_id = ?");
-            $del->execute([$userId, $course_id]);
+            $eid = eav_find_enrollment_id($userId, $course_id);
+            if ($eid !== null) {
+                eav_delete_entity($eid);
+            }
             $flash['success'] = "You have been unenrolled.";
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
             $flash['error'] = "Error: " . $e->getMessage();
         }
 

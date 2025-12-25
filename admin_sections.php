@@ -2,6 +2,7 @@
 require_once 'auth.php';
 require_role('admin');
 require_once 'db.php';
+require_once 'eav.php';
 
 $pdo = getDB();
 $errors = [];
@@ -21,10 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     if (!$course_id || $section_number < 1 || $section_number > 4) {
         $errors[] = 'Invalid course or section number (must be 1-4).';
     } else {
-        // Ensure no more than one row for same course & section_number
-        $stmt = $pdo->prepare('SELECT COUNT(*) FROM sections WHERE course_id = ? AND section_number = ?');
-        $stmt->execute([$course_id, $section_number]);
-        if ($stmt->fetchColumn() > 0) {
+        // Pure EAV: enforce uniqueness in code
+        if (eav_section_exists($course_id, $section_number)) {
             $errors[] = 'That section already exists for this course.';
         }
     }
@@ -46,8 +45,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     }
 
     if (empty($errors)) {
-        $ins = $pdo->prepare('INSERT INTO sections (course_id, section_number, professor_id, capacity) VALUES (?, ?, ?, ?)');
-        $ins->execute([$course_id, $section_number, $professor_id, $capacity]);
+        $pdo->beginTransaction();
+        try {
+            $sectionId = eav_create_entity('section');
+            eav_set($sectionId, 'section', 'course_id', $course_id);
+            eav_set($sectionId, 'section', 'section_number', $section_number);
+            if ($professor_id !== null) eav_set($sectionId, 'section', 'professor_id', $professor_id);
+            eav_set($sectionId, 'section', 'capacity', $capacity);
+            $pdo->commit();
+        } catch (Throwable $t) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $errors[] = 'Error: ' . $t->getMessage();
+        }
 
         // Redirect depending on button clicked
         if (isset($_POST['save_exit'])) {
@@ -65,8 +74,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     $id = (int)($_POST['id'] ?? 0);
     $course_id = (int)($_POST['course_id'] ?? 0);
     if ($id) {
-        $del = $pdo->prepare('DELETE FROM sections WHERE id = ?');
-        $del->execute([$id]);
+        $pdo->beginTransaction();
+        try {
+            // Pure EAV: manual cascades
+            eav_delete_enrollments_by_section($id);
+            eav_delete_entity($id);
+            $pdo->commit();
+        } catch (Throwable $t) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $errors[] = 'Error: ' . $t->getMessage();
+        }
         header('Location: admin_sections.php?course_id=' . $course_id);
         exit;
     }
