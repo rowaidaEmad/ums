@@ -146,7 +146,7 @@ $students = $students->fetchAll();
 
 <button type="button" class="btn" id="calculateBtn" 
         style="background-color: purple; color: white; border: none;">
-    Calculate Total & GPA
+    Calculate Total & Grade
 </button>
 
 <button type="submit" class="btn" 
