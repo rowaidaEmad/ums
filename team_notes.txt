@@ -1,0 +1,20 @@
+run  website ->	http://localhost/ums/index.php
+Change the database->	http://localhost/phpmyadmin
+Change how pages look	edit -> .php files
+Change login or logic	edit -> auth.php / index.php
+Change course behavior edit-> admin_courses.php
+Change student enrollment	edit-> student_courses.php
+------------------------------------------------------
+email/pass
+admin@ums.edu/admin123
+somaya@student.edu/student123
+habiba@student.edu/student123
+rowaida@student.edu/student123
+ahmed@student.edu/student123
+rawan@student.edu/student123
+Drmohamed@prof.edu/prof123
+Engabdelrahman@prof.edu/prof123
+drKhalil@prof.edu/prof123
+drayman@prof.edu/prof123
+drnabil@prof.edu/prof123
+drSherif@prof.edu/prof123
