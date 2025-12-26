@@ -10,14 +10,14 @@ USE ums_eav;
 
 CREATE TABLE entities (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    entity_type ENUM('user','course','section','enrollment','parent_link','request') NOT NULL,
+    entity_type ENUM('user','course','section','enrollment','parent_link','request','message') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE eav_attributes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    entity_type ENUM('user','course','section','enrollment','parent_link','request') NOT NULL,
+    entity_type ENUM('user','course','section','enrollment','parent_link','request','message') NOT NULL,
     name VARCHAR(64) NOT NULL,
     data_type ENUM('string','text','int','bool') NOT NULL,
     UNIQUE KEY uq_attr (entity_type, name)
@@ -78,7 +78,11 @@ INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
 ('request','request_type','string'),
 ('request','status','string'),
 ('request','message','text'),
-('request','reply_note','text');
+('request','reply_note','text'),
+-- message
+('message','from_user_id','int'),
+('message','to_user_id','int'),
+('message','body','text');
 
 
 INSERT INTO eav_attributes (entity_type, name, data_type)
@@ -443,3 +447,19 @@ SELECT
 FROM room_schedule s
 LEFT JOIN courses c ON c.id = s.course_id
 ORDER BY s.slot_date, s.start_time, s.room_number;
+
+
+-- Messages view (simple direct messages)
+CREATE OR REPLACE VIEW messages AS
+SELECT
+    e.id,
+    MAX(CASE WHEN a.name='from_user_id' THEN v.value_int END) AS from_user_id,
+    MAX(CASE WHEN a.name='to_user_id' THEN v.value_int END) AS to_user_id,
+    MAX(CASE WHEN a.name='body' THEN v.value_text END) AS body,
+    e.created_at
+FROM entities e
+JOIN eav_values v ON v.entity_id = e.id
+JOIN eav_attributes a ON a.id = v.attribute_id
+WHERE e.entity_type='message'
+GROUP BY e.id;
+
