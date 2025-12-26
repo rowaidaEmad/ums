@@ -7,6 +7,22 @@ require_role('admin');
 <h3>Admin Dashboard</h3>
 <p>Welcome, <?= htmlspecialchars($_SESSION['user']['name']) ?>.</p>
 <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px;">
+    <!-- Create Users Card -->
+    <a href="admin_create_user.php" style="
+        display: block;
+        width: 200px;
+        padding: 20px;
+        text-align: center;
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    ">
+        <div style="font-size: 40px; margin-bottom: 10px;">👤</div>
+        <div style="font-size: 18px; font-weight: bold;">Create User</div>
+    </a>
+
     <!-- Manage Courses Card -->
     <a href="admin_courses.php" style="
         display: block;

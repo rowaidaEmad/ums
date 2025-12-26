@@ -36,6 +36,7 @@ if (session_status() === PHP_SESSION_NONE) {
                 <?php if (isset($_SESSION['user'])): ?>
                     <?php if ($_SESSION['user']['role'] === 'admin'): ?>
                         <li class="nav-item"><a class="nav-link" href="admin_dashboard.php">Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link" href="admin_create_user.php">Create User</a></li>
                         <li class="nav-item"><a class="nav-link" href="admin_parent_link.php">Parent Linking</a></li>
                         <li class="nav-item"><a class="nav-link" href="admin_requests.php">Requests</a></li>
                     <?php elseif ($_SESSION['user']['role'] === 'parent'): ?>
