@@ -304,3 +304,192 @@ function eav_delete_sections_by_course(int $course_id): void {
         eav_delete_entity($sid);
     }
 }
+
+
+/** List users by role using users view. */
+function eav_list_users_by_role(string $role): array {
+    $pdo = eav_db();
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE role = ? ORDER BY name");
+    $stmt->execute([$role]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** Create a parent_link entity linking a parent to a student (no duplicates). */
+function eav_parent_link_exists(int $parent_id, int $student_id): bool {
+    $pdo = eav_db();
+    $sql = "
+        SELECT COUNT(*) AS c
+        FROM entities e
+        JOIN eav_values vp ON vp.entity_id = e.id
+        JOIN eav_values vs ON vs.entity_id = e.id
+        JOIN eav_attributes ap ON ap.id = vp.attribute_id
+        JOIN eav_attributes as1 ON as1.id = vs.attribute_id
+        WHERE e.entity_type = 'parent_link'
+          AND ap.entity_type='parent_link' AND ap.name='parent_id' AND vp.value_int = ?
+          AND as1.entity_type='parent_link' AND as1.name='student_id' AND vs.value_int = ?
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$parent_id, $student_id]);
+    return ((int)$stmt->fetchColumn()) > 0;
+}
+
+function eav_link_parent_student(int $parent_id, int $student_id): int {
+    if (eav_parent_link_exists($parent_id, $student_id)) {
+        return 0;
+    }
+    $link_id = eav_create_entity('parent_link');
+    eav_set($link_id, 'parent_link', 'parent_id', $parent_id);
+    eav_set($link_id, 'parent_link', 'student_id', $student_id);
+    return $link_id;
+}
+
+function eav_unlink_parent_student(int $parent_id, int $student_id): void {
+    $pdo = eav_db();
+    $sql = "
+        SELECT e.id
+        FROM entities e
+        JOIN eav_values vp ON vp.entity_id = e.id
+        JOIN eav_values vs ON vs.entity_id = e.id
+        JOIN eav_attributes ap ON ap.id = vp.attribute_id
+        JOIN eav_attributes as1 ON as1.id = vs.attribute_id
+        WHERE e.entity_type = 'parent_link'
+          AND ap.entity_type='parent_link' AND ap.name='parent_id' AND vp.value_int = ?
+          AND as1.entity_type='parent_link' AND as1.name='student_id' AND vs.value_int = ?
+        LIMIT 1
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$parent_id, $student_id]);
+    $id = $stmt->fetchColumn();
+    if ($id) {
+        eav_delete_entity((int)$id);
+    }
+}
+
+/** Get students linked to a parent (returns rows from users view). */
+function eav_get_linked_students(int $parent_id): array {
+    $pdo = eav_db();
+    $sql = "
+        SELECT u.*
+        FROM users u
+        WHERE u.role='student'
+          AND u.id IN (
+            SELECT vs.value_int
+            FROM entities e
+            JOIN eav_values vp ON vp.entity_id = e.id
+            JOIN eav_values vs ON vs.entity_id = e.id
+            JOIN eav_attributes ap ON ap.id = vp.attribute_id
+            JOIN eav_attributes as1 ON as1.id = vs.attribute_id
+            WHERE e.entity_type='parent_link'
+              AND ap.entity_type='parent_link' AND ap.name='parent_id' AND vp.value_int = ?
+              AND as1.entity_type='parent_link' AND as1.name='student_id'
+          )
+        ORDER BY u.name
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$parent_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function eav_is_student_linked_to_parent(int $parent_id, int $student_id): bool {
+    return eav_parent_link_exists($parent_id, $student_id);
+}
+
+/** Compute student's current average from enrollments (numeric or letter grades). */
+function eav_student_current_average(int $student_id): ?float {
+    $pdo = eav_db();
+    $stmt = $pdo->prepare("SELECT grade FROM enrollments WHERE student_id = ? AND grade IS NOT NULL AND grade <> ''");
+    $stmt->execute([$student_id]);
+    $grades = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    if (!$grades) return null;
+
+    $map = [
+        'A+' => 98, 'A' => 95, 'A-' => 92,
+        'B+' => 88, 'B' => 85, 'B-' => 82,
+        'C+' => 78, 'C' => 75, 'C-' => 72,
+        'D+' => 68, 'D' => 65, 'D-' => 62,
+        'F' => 50
+    ];
+    $sum = 0.0; $count = 0;
+    foreach ($grades as $g) {
+        $g = strtoupper(trim((string)$g));
+        if ($g === '') continue;
+        if (is_numeric($g)) {
+            $sum += (float)$g; $count++;
+        } elseif (isset($map[$g])) {
+            $sum += $map[$g]; $count++;
+        }
+    }
+    if ($count === 0) return null;
+    return $sum / $count;
+}
+
+/** Create a parent request entity. Returns request id. */
+function eav_create_parent_request(int $parent_id, int $student_id, string $request_type, string $message): int {
+    $rid = eav_create_entity('request');
+    eav_set($rid, 'request', 'parent_id', $parent_id);
+    eav_set($rid, 'request', 'student_id', $student_id);
+    eav_set($rid, 'request', 'request_type', $request_type);
+    eav_set($rid, 'request', 'status', 'OPEN');
+    eav_set($rid, 'request', 'message', $message);
+    eav_set($rid, 'request', 'reply_note', '');
+    return $rid;
+}
+
+/** Fetch requests in a pivoted shape (optionally filtered by parent). */
+function eav_fetch_requests(?int $parent_id = null): array {
+    $pdo = eav_db();
+    $sql = "
+        SELECT
+            e.id,
+            e.created_at,
+            MAX(CASE WHEN a.name='parent_id' THEN v.value_int END) AS parent_id,
+            MAX(CASE WHEN a.name='student_id' THEN v.value_int END) AS student_id,
+            MAX(CASE WHEN a.name='request_type' THEN v.value_string END) AS request_type,
+            MAX(CASE WHEN a.name='status' THEN v.value_string END) AS status,
+            MAX(CASE WHEN a.name='message' THEN v.value_text END) AS message,
+            MAX(CASE WHEN a.name='reply_note' THEN v.value_text END) AS reply_note
+        FROM entities e
+        LEFT JOIN eav_values v ON v.entity_id = e.id
+        LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='request'
+        WHERE e.entity_type='request'
+        GROUP BY e.id
+    ";
+    $sql .= " ORDER BY e.created_at DESC ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($parent_id === null) return $rows;
+    return array_values(array_filter($rows, fn($r) => (int)$r['parent_id'] === $parent_id));
+}
+
+function eav_get_request(int $request_id): ?array {
+    $pdo = eav_db();
+    $sql = "
+        SELECT
+            e.id,
+            e.created_at,
+            MAX(CASE WHEN a.name='parent_id' THEN v.value_int END) AS parent_id,
+            MAX(CASE WHEN a.name='student_id' THEN v.value_int END) AS student_id,
+            MAX(CASE WHEN a.name='request_type' THEN v.value_string END) AS request_type,
+            MAX(CASE WHEN a.name='status' THEN v.value_string END) AS status,
+            MAX(CASE WHEN a.name='message' THEN v.value_text END) AS message,
+            MAX(CASE WHEN a.name='reply_note' THEN v.value_text END) AS reply_note
+        FROM entities e
+        LEFT JOIN eav_values v ON v.entity_id = e.id
+        LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='request'
+        WHERE e.entity_type='request' AND e.id = ?
+        GROUP BY e.id
+        LIMIT 1
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$request_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+function eav_update_request(int $request_id, string $status, string $reply_note=''): void {
+    eav_set($request_id, 'request', 'status', $status);
+    eav_set($request_id, 'request', 'reply_note', $reply_note);
+}
+

@@ -31,6 +31,9 @@ function redirect_by_role($role)
         case 'professor':
             header('Location: professor_dashboard.php');
             break;
+        case 'parent':
+            header('Location: parent_dashboard.php');
+            break;
         default:
             header('Location: index.php');
     }
