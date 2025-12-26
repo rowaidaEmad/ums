@@ -68,6 +68,17 @@ INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
 ('enrollment','section_id','int'),
 ('enrollment','grade','string');
 
+INSERT INTO eav_attributes (entity_type, name, data_type)
+VALUES ('course', 'credit_hours', 'int');
+
+
+INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
+('enrollment', 'midterm', 'int'),
+('enrollment', 'activities', 'int'),
+('enrollment', 'final', 'int'),
+('enrollment', 'total', 'int'),
+('enrollment', 'gpa', 'decimal');
+
 -- -----------------------------
 -- Seed data (matches original project)
 -- -----------------------------
@@ -236,6 +247,22 @@ SELECT 16, id, 11 FROM eav_attributes WHERE entity_type='course' AND name='profe
 INSERT INTO eav_values (entity_id, attribute_id, value_bool)
 SELECT 16, id, 0 FROM eav_attributes WHERE entity_type='course' AND name='is_core';
 
+-- CS223 – Agile Software Engineering (3 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 13, id, 3 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
+
+-- CSE351 – Computer Networks (4 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 14, id, 4 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
+
+-- CSE211 – Intro to Embedded (3 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 15, id, 3 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
+
+-- EMP119 – Engineering Economy (2 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 16, id, 2 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
+
 -- -----------------------------
 -- READ-ONLY views (compatibility)
 -- -----------------------------
@@ -265,12 +292,14 @@ SELECT
     COALESCE(MAX(CASE WHEN a.name='is_core' THEN v.value_bool END), 0) AS is_core,
     MAX(CASE WHEN a.name='prerequisites' THEN v.value_string END) AS prerequisites,
     MAX(CASE WHEN a.name='must_level' THEN v.value_string END) AS must_level,
-    MAX(CASE WHEN a.name='room' THEN v.value_string END) AS room
+    MAX(CASE WHEN a.name='room' THEN v.value_string END) AS room,
+    MAX(CASE WHEN a.name='credit_hours' THEN v.value_int END) AS credit_hours
 FROM entities e
 LEFT JOIN eav_values v ON v.entity_id = e.id
-LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='course'
+LEFT JOIN eav_attributes a ON a.id = v.attribute_id
 WHERE e.entity_type='course'
 GROUP BY e.id;
+
 
 -- Sections view (matches original `sections` table)
 CREATE OR REPLACE VIEW sections AS
@@ -313,3 +342,43 @@ LEFT JOIN eav_values v ON v.entity_id = e.id
 LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='enrollment'
 WHERE e.entity_type='enrollment'
 GROUP BY e.id;
+/* ============================================================
+   SCHEDULING (Manual bookings)
+   ============================================================ */
+
+CREATE TABLE IF NOT EXISTS room_schedule (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+  -- When this booking happens
+  slot_date    DATE NOT NULL,             -- e.g., 2025-01-03
+  start_time   TIME NOT NULL,             -- whole hour: 08:00:00..19:00:00
+  end_time     TIME NOT NULL,             -- always start_time + 1 hour
+  -- Which room (numeric attribute; no separate rooms table needed)
+  room_number  INT  NOT NULL,             -- e.g., 101
+  -- What is booked
+  course_id    INT  NOT NULL,             -- matches courses.id (view-backed)
+  section_id   INT  NULL,                 -- optional if you schedule per section
+  -- CONFLICT GUARDS:
+  UNIQUE KEY uq_room_slot   (room_number, slot_date, start_time),
+  UNIQUE KEY uq_course_slot (course_id,  slot_date, start_time),
+
+  CONSTRAINT chk_one_hour
+    CHECK (TIME_TO_SEC(end_time) - TIME_TO_SEC(start_time) = 3600)
+);
+CREATE INDEX idx_schedule_week ON room_schedule (slot_date, start_time);
+
+CREATE OR REPLACE VIEW room_schedule_v AS
+SELECT
+  s.id,
+  s.slot_date,
+  s.start_time,
+  s.end_time,
+  s.room_number,
+  s.course_id,
+  c.code  AS course_code,
+  c.title AS course_title,
+  s.section_id
+FROM room_schedule s
+LEFT JOIN courses c ON c.id = s.course_id
+ORDER BY s.slot_date, s.start_time, s.room_number;
+
