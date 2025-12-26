@@ -117,11 +117,32 @@ require_role('admin');
         background: linear-gradient(135deg, #696cd6ff, #696cd6ff);
         border-radius: 10px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+    " onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)';
     ">
         <div style="font-size:40px;">💰</div>
         <div style="font-weight:bold;">Credit Price</div>
     </a>
-
+    
+    <!-- Announcements Card (NEW, placed beside Credit Price) -->
+    <a href="admin_announcements.php" style="
+        display: block;
+        width: 200px;
+        padding: 20px;
+        text-align: center;
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #696cd6ff, #696cd6ff);
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+    " onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)';
+    
+        <--- Announcements Icon -->
+     ">
+        <div style="font-size:40px;">📢</div>
+        <div style="font-weight:bold;">Announcements</div>
+    </a>
 </div>
 
 

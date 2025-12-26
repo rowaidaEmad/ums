@@ -87,7 +87,6 @@ if ($selected_student) {
     <div class="card mt-3">
       <div class="card-body">
         <h5 class="card-title">Announcements</h5>
-        <p class="text-muted mb-0">I will add announcement logic later for all users.</p>
         <a href="parent_announcements.php" class="btn btn-sm btn-outline-primary mt-2">Open</a>
       </div>
     </div>
@@ -137,5 +136,6 @@ if ($selected_student) {
     </div>
   </div>
 </div>
+
 
 <?php include 'footer.php'; ?>
