@@ -33,6 +33,37 @@ $enrollmentsStmt = $pdo->prepare(
 );
 $enrollmentsStmt->execute([$userId]);
 $enrollments = $enrollmentsStmt->fetchAll(PDO::FETCH_ASSOC);
+// ----------------------
+// Calculate GPA
+// ----------------------
+$totalWeightedPoints = 0;
+$totalCreditHours = 0;
+
+foreach ($enrollments as $course) {
+    $total = $course['total']; // total marks
+    $credits = $course['credit_hours'];
+
+    if ($total !== null && $credits) {
+        // Convert total marks to grade points
+        $gradePoint = 0;
+
+        if ($total >= 90) $gradePoint = 4.0;
+        elseif ($total >= 85) $gradePoint = 3.7;
+        elseif ($total >= 80) $gradePoint = 3.3;
+        elseif ($total >= 75) $gradePoint = 3.0;
+        elseif ($total >= 70) $gradePoint = 2.7;
+        elseif ($total >= 65) $gradePoint = 2.3;
+        elseif ($total >= 60) $gradePoint = 2.0;
+        elseif ($total >= 50) $gradePoint = 1.0;
+        else $gradePoint = 0;
+
+        $totalWeightedPoints += $gradePoint * $credits;
+        $totalCreditHours += $credits;
+    }
+}
+
+$gpa = $totalCreditHours ? round($totalWeightedPoints / $totalCreditHours, 2) : null;
+
 
 // Upcoming scheduled slots (next 14 days)
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
@@ -56,6 +87,15 @@ try {
 
 include 'header.php';
 ?>
+<?php if ($gpa !== null): ?>
+    <div class="alert alert-info">
+        <strong>GPA:</strong> <?= htmlspecialchars($gpa) ?>
+    </div>
+<?php else: ?>
+    <div class="alert alert-warning">
+        GPA not available (grades missing).
+    </div>
+<?php endif; ?>
 
 <div class="container my-3">
   <h3>My Courses</h3>
