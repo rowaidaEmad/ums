@@ -22,16 +22,22 @@ if ($selected_student) {
     $avg = eav_student_current_average((int)$selected_student['id']);
 }
 
-// Grades snapshot: reuse enrollments view
+// Grades snapshot: include midterm, activities, final, and letter grade
 $grades = [];
 if ($selected_student) {
     $pdo = getDB();
     $stmt = $pdo->prepare("
-		SELECT c.title AS course_title, g.grade
-		FROM enrollments e
-		JOIN courses c ON c.id = e.course_id
-		LEFT JOIN grades g ON g.enrollment_id = e.id
+        SELECT c.title AS course_title,
+               MAX(CASE WHEN a.name='midterm' THEN v.value_int END) AS midterm,
+               MAX(CASE WHEN a.name='activities' THEN v.value_int END) AS activities,
+               MAX(CASE WHEN a.name='final' THEN v.value_int END) AS final,
+               MAX(CASE WHEN a.name='grade' THEN v.value_string END) AS grade
+        FROM enrollments e
+        JOIN courses c ON c.id = e.course_id
+        LEFT JOIN eav_values v ON v.entity_id = e.id
+        LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='enrollment'
         WHERE e.student_id = ?
+        GROUP BY c.id
         ORDER BY c.title
     ");
     $stmt->execute([(int)$selected_student['id']]);
@@ -81,7 +87,7 @@ if ($selected_student) {
     <div class="card mt-3">
       <div class="card-body">
         <h5 class="card-title">Announcements</h5>
-        <p class="text-muted mb-0">I will add announcement logic latter for all users.</p>
+        <p class="text-muted mb-0">I will add announcement logic later for all users.</p>
         <a href="parent_announcements.php" class="btn btn-sm btn-outline-primary mt-2">Open</a>
       </div>
     </div>
@@ -105,19 +111,21 @@ if ($selected_student) {
               <tr>
                 <th>Course</th>
                 <th>Midterm</th>
+                <th>Activities</th>
                 <th>Final</th>
-                <th>Total / Current</th>
+                <th>Grade</th>
               </tr>
             </thead>
             <tbody>
               <?php if (empty($grades)): ?>
-                <tr><td colspan="4" class="text-muted">No grades yet.</td></tr>
+                <tr><td colspan="5" class="text-muted">No grades yet.</td></tr>
               <?php else: ?>
                 <?php foreach ($grades as $g): ?>
                   <tr>
                     <td><?= htmlspecialchars($g['course_title']) ?></td>
-                    <td>-</td>
-                    <td>-</td>
+                    <td><?= htmlspecialchars($g['midterm'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($g['activities'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($g['final'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($g['grade'] ?? '-') ?></td>
                   </tr>
                 <?php endforeach; ?>

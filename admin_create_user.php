@@ -127,15 +127,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="text" name="password" class="form-control" value="<?= htmlspecialchars($password) ?>" required>
         </div>
 
-        <div class="col-md-6">
-            <label class="form-label">Program / Major <?= $role==='student' ? '<span class="text-danger">*</span>' : '' ?></label>
+       <div class="col-md-6 student-only">
+            <label class="form-label">Program / Major <span class="text-danger">*</span></label>
             <input type="text" name="program" class="form-control" value="<?= htmlspecialchars($program) ?>" placeholder="e.g., Computer Science">
         </div>
 
-        <div class="col-md-6">
-            <label class="form-label">Level / Year <?= $role==='student' ? '<span class="text-danger">*</span>' : '' ?></label>
+        <div class="col-md-6 student-only">
+            <label class="form-label">Level / Year <span class="text-danger">*</span></label>
             <input type="text" name="level" class="form-control" value="<?= htmlspecialchars($level) ?>" placeholder="e.g., 3">
         </div>
+
     </div>
 
     <div class="mt-3">
@@ -162,6 +163,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   cb.addEventListener('change', sync);
   sync();
+})();
+// Hide/show student fields based on role
+(function() {
+  var roleSelect = document.querySelector('select[name="role"]');
+  var studentFields = document.querySelectorAll('.student-only');
+
+  function toggleStudentFields() {
+    if (roleSelect.value === 'student') {
+      studentFields.forEach(f => f.style.display = 'block');
+      studentFields.forEach(f => f.querySelector('input').setAttribute('required', 'required'));
+    } else {
+      studentFields.forEach(f => f.style.display = 'none');
+      studentFields.forEach(f => f.querySelector('input').removeAttribute('required'));
+    }
+  }
+
+  roleSelect.addEventListener('change', toggleStudentFields);
+  toggleStudentFields(); // run on page load
 })();
 </script>
 
