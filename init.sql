@@ -10,14 +10,14 @@ USE ums_eav;
 
 CREATE TABLE entities (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    entity_type ENUM('user','course','section','enrollment','parent_link','request') NOT NULL,
+    entity_type ENUM('user','course','section','enrollment') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE eav_attributes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    entity_type ENUM('user','course','section','enrollment','parent_link','request') NOT NULL,
+    entity_type ENUM('user','course','section','enrollment') NOT NULL,
     name VARCHAR(64) NOT NULL,
     data_type ENUM('string','text','int','bool') NOT NULL,
     UNIQUE KEY uq_attr (entity_type, name)
@@ -48,8 +48,6 @@ INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
 ('user','email','string'),
 ('user','password','string'),
 ('user','role','string'),
-('user','program','string'),
-('user','level','string'),
 -- course
 ('course','code','string'),
 ('course','title','string'),
@@ -68,17 +66,18 @@ INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
 ('enrollment','student_id','int'),
 ('enrollment','course_id','int'),
 ('enrollment','section_id','int'),
-('enrollment','grade','string'),
--- parent_link
-('parent_link','parent_id','int'),
-('parent_link','student_id','int'),
--- request
-('request','parent_id','int'),
-('request','student_id','int'),
-('request','request_type','string'),
-('request','status','string'),
-('request','message','text'),
-('request','reply_note','text');
+('enrollment','grade','string');
+
+INSERT INTO eav_attributes (entity_type, name, data_type)
+VALUES ('course', 'credit_hours', 'int');
+
+
+INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
+('enrollment', 'midterm', 'int'),
+('enrollment', 'activities', 'int'),
+('enrollment', 'final', 'int'),
+('enrollment', 'total', 'int'),
+('enrollment', 'gpa', 'decimal');
 
 -- -----------------------------
 -- Seed data (matches original project)
@@ -201,34 +200,6 @@ SELECT 12, id, 'prof123' FROM eav_attributes WHERE entity_type='user' AND name='
 INSERT INTO eav_values (entity_id, attribute_id, value_string)
 SELECT 12, id, 'professor' FROM eav_attributes WHERE entity_type='user' AND name='role';
 
--- Student extra attributes (program/level)
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 2, id, 'Computer Science' FROM eav_attributes WHERE entity_type='user' AND name='program';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 2, id, '2' FROM eav_attributes WHERE entity_type='user' AND name='level';
-
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 3, id, 'Computer Science' FROM eav_attributes WHERE entity_type='user' AND name='program';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 3, id, '3' FROM eav_attributes WHERE entity_type='user' AND name='level';
-
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 4, id, 'Information Systems' FROM eav_attributes WHERE entity_type='user' AND name='program';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 4, id, '1' FROM eav_attributes WHERE entity_type='user' AND name='level';
-
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 5, id, 'Software Engineering' FROM eav_attributes WHERE entity_type='user' AND name='program';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 5, id, '4' FROM eav_attributes WHERE entity_type='user' AND name='level';
-
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 6, id, 'Cyber Security' FROM eav_attributes WHERE entity_type='user' AND name='program';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT 6, id, '2' FROM eav_attributes WHERE entity_type='user' AND name='level';
-
-
-
 -- Courses
 INSERT INTO entities (entity_type) VALUES ('course'),('course'),('course'),('course');
 -- course ids start at 13
@@ -276,18 +247,21 @@ SELECT 16, id, 11 FROM eav_attributes WHERE entity_type='course' AND name='profe
 INSERT INTO eav_values (entity_id, attribute_id, value_bool)
 SELECT 16, id, 0 FROM eav_attributes WHERE entity_type='course' AND name='is_core';
 
+-- CS223 – Agile Software Engineering (3 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 13, id, 3 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
 
--- Parent user seed (for testing parent features)
-INSERT INTO entities (entity_type) VALUES ('user');
-SET @parent_id := LAST_INSERT_ID();
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT @parent_id, id, 'Parent One' FROM eav_attributes WHERE entity_type='user' AND name='name';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT @parent_id, id, 'parent@ums.edu' FROM eav_attributes WHERE entity_type='user' AND name='email';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT @parent_id, id, 'parent123' FROM eav_attributes WHERE entity_type='user' AND name='password';
-INSERT INTO eav_values (entity_id, attribute_id, value_string)
-SELECT @parent_id, id, 'parent' FROM eav_attributes WHERE entity_type='user' AND name='role';
+-- CSE351 – Computer Networks (4 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 14, id, 4 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
+
+-- CSE211 – Intro to Embedded (3 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 15, id, 3 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
+
+-- EMP119 – Engineering Economy (2 credits)
+INSERT INTO eav_values (entity_id, attribute_id, value_int)
+SELECT 16, id, 2 FROM eav_attributes WHERE entity_type='course' AND name='credit_hours';
 
 -- -----------------------------
 -- READ-ONLY views (compatibility)
@@ -300,9 +274,7 @@ SELECT
     MAX(CASE WHEN a.name='name' THEN v.value_string END) AS name,
     MAX(CASE WHEN a.name='email' THEN v.value_string END) AS email,
     MAX(CASE WHEN a.name='password' THEN v.value_string END) AS password,
-    MAX(CASE WHEN a.name='role' THEN v.value_string END) AS role,
-    MAX(CASE WHEN a.name='program' THEN v.value_string END) AS program,
-    MAX(CASE WHEN a.name='level' THEN v.value_string END) AS level
+    MAX(CASE WHEN a.name='role' THEN v.value_string END) AS role
 FROM entities e
 LEFT JOIN eav_values v ON v.entity_id = e.id
 LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='user'
@@ -320,12 +292,14 @@ SELECT
     COALESCE(MAX(CASE WHEN a.name='is_core' THEN v.value_bool END), 0) AS is_core,
     MAX(CASE WHEN a.name='prerequisites' THEN v.value_string END) AS prerequisites,
     MAX(CASE WHEN a.name='must_level' THEN v.value_string END) AS must_level,
-    MAX(CASE WHEN a.name='room' THEN v.value_string END) AS room
+    MAX(CASE WHEN a.name='room' THEN v.value_string END) AS room,
+    MAX(CASE WHEN a.name='credit_hours' THEN v.value_int END) AS credit_hours
 FROM entities e
 LEFT JOIN eav_values v ON v.entity_id = e.id
-LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='course'
+LEFT JOIN eav_attributes a ON a.id = v.attribute_id
 WHERE e.entity_type='course'
 GROUP BY e.id;
+
 
 -- Sections view (matches original `sections` table)
 CREATE OR REPLACE VIEW sections AS
@@ -368,3 +342,42 @@ LEFT JOIN eav_values v ON v.entity_id = e.id
 LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='enrollment'
 WHERE e.entity_type='enrollment'
 GROUP BY e.id;
+/* ============================================================
+   SCHEDULING (Manual bookings)
+   ============================================================ */
+
+CREATE TABLE IF NOT EXISTS room_schedule (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+  -- When this booking happens
+  slot_date    DATE NOT NULL,             -- e.g., 2025-01-03
+  start_time   TIME NOT NULL,             -- whole hour: 08:00:00..19:00:00
+  end_time     TIME NOT NULL,             -- always start_time + 1 hour
+  -- Which room (numeric attribute; no separate rooms table needed)
+  room_number  INT  NOT NULL,             -- e.g., 101
+  -- What is booked
+  course_id    INT  NOT NULL,             -- matches courses.id (view-backed)
+  section_id   INT  NULL,                 -- optional if you schedule per section
+  -- CONFLICT GUARDS:
+  UNIQUE KEY uq_room_slot   (room_number, slot_date, start_time),
+  UNIQUE KEY uq_course_slot (course_id,  slot_date, start_time),
+
+  CONSTRAINT chk_one_hour
+    CHECK (TIME_TO_SEC(end_time) - TIME_TO_SEC(start_time) = 3600)
+);
+CREATE INDEX idx_schedule_week ON room_schedule (slot_date, start_time);
+
+CREATE OR REPLACE VIEW room_schedule_v AS
+SELECT
+  s.id,
+  s.slot_date,
+  s.start_time,
+  s.end_time,
+  s.room_number,
+  s.course_id,
+  c.code  AS course_code,
+  c.title AS course_title,
+  s.section_id
+FROM room_schedule s
+LEFT JOIN courses c ON c.id = s.course_id
+ORDER BY s.slot_date, s.start_time, s.room_number;
