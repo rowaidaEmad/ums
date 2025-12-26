@@ -92,6 +92,10 @@ INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
 ('enrollment', 'total', 'int'),
 ('enrollment', 'gpa', 'decimal');
 
+INSERT INTO eav_attributes (entity_type, name, data_type)
+VALUES ('user', 'credit_hour_price', 'int');
+
+
 -- -----------------------------
 -- Seed data (matches original project)
 -- -----------------------------

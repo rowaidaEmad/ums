@@ -107,6 +107,21 @@ require_role('admin');
         <img src="icons/course.png" alt="Requests" style="width:50px; margin-bottom:10px;">
         <div style="font-weight:bold; font-size:16px;">Parent Requests</div>
     </a>
+    <a href="admin_settings.php" style="
+        display: block;
+        width: 200px;
+        padding: 20px;
+        text-align: center;
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #696cd6ff, #696cd6ff);
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    ">
+        <div style="font-size:40px;">💰</div>
+        <div style="font-weight:bold;">Credit Price</div>
+    </a>
+
 </div>
 
 
