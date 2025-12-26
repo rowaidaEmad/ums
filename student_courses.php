@@ -64,14 +64,17 @@ include 'header.php';
   <div class="row g-3">
       <?php foreach ($enrollments as $course): ?>
       <div class="col-md-4">
-        <button class="btn btn-primary w-100 h-100 d-flex flex-column justify-content-center align-items-center"
+      <button style="background-color:#696cd6; color:white; border:none; border-radius:10px; height:100px;"
+                class="w-100 d-flex flex-column justify-content-center align-items-center"
                 data-bs-toggle="modal"
                 data-bs-target="#courseModal"
                 data-course='<?= json_encode($course, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>'
                 data-slots='<?= json_encode($slotsByCourse[$course["course_id"]] ?? [], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>'>
-          <strong><?= htmlspecialchars($course['code']) ?></strong>
-          <span><?= htmlspecialchars($course['title']) ?></span>
+        <strong><?= htmlspecialchars($course['code']) ?></strong>
+        <span><?= htmlspecialchars($course['title']) ?></span>
         </button>
+
+
       </div>
       <?php endforeach; ?>
   </div>
