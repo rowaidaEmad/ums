@@ -19,10 +19,30 @@ if (session_status() === PHP_SESSION_NONE) {
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
     <div class="container-fluid">
-        <a class="navbar-brand" href="#">UMS</a>
+        <?php
+            $dashboard = 'index.php';
+            if (isset($_SESSION['user']['role'])) {
+                switch ($_SESSION['user']['role']) {
+                    case 'admin': $dashboard = 'admin_dashboard.php'; break;
+                    case 'student': $dashboard = 'student_dashboard.php'; break;
+                    case 'professor': $dashboard = 'professor_dashboard.php'; break;
+                    case 'parent': $dashboard = 'parent_dashboard.php'; break;
+                }
+            }
+        ?>
+        <a class="navbar-brand" href="<?= htmlspecialchars($dashboard) ?>">UMS</a>
         <div class="collapse navbar-collapse">
             <ul class="navbar-nav ms-auto">
                 <?php if (isset($_SESSION['user'])): ?>
+                    <?php if ($_SESSION['user']['role'] === 'admin'): ?>
+                        <li class="nav-item"><a class="nav-link" href="admin_dashboard.php">Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link" href="admin_parent_link.php">Parent Linking</a></li>
+                        <li class="nav-item"><a class="nav-link" href="admin_requests.php">Requests</a></li>
+                    <?php elseif ($_SESSION['user']['role'] === 'parent'): ?>
+                        <li class="nav-item"><a class="nav-link" href="parent_dashboard.php">Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link" href="parent_requests.php">Requests</a></li>
+                        <li class="nav-item"><a class="nav-link" href="parent_announcements.php">Announcements</a></li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <span class="navbar-text me-3">
                             <?= htmlspecialchars($_SESSION['user']['name']) ?>
