@@ -27,9 +27,10 @@ $grades = [];
 if ($selected_student) {
     $pdo = getDB();
     $stmt = $pdo->prepare("
-        SELECT c.title AS course_title, e.grade
-        FROM enrollments e
-        JOIN courses c ON c.id = e.course_id
+		SELECT c.title AS course_title, g.grade
+		FROM enrollments e
+		JOIN courses c ON c.id = e.course_id
+		LEFT JOIN grades g ON g.enrollment_id = e.id
         WHERE e.student_id = ?
         ORDER BY c.title
     ");

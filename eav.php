@@ -397,7 +397,17 @@ function eav_is_student_linked_to_parent(int $parent_id, int $student_id): bool 
 /** Compute student's current average from enrollments (numeric or letter grades). */
 function eav_student_current_average(int $student_id): ?float {
     $pdo = eav_db();
-    $stmt = $pdo->prepare("SELECT grade FROM enrollments WHERE student_id = ? AND grade IS NOT NULL AND grade <> ''");
+    // In this project, the `enrollments` view does not include a `grade` column.
+    // Grades are stored as an EAV attribute on the enrollment entity and exposed
+    // via the legacy-compatible `grades` VIEW.
+    $stmt = $pdo->prepare(
+        "SELECT g.grade
+         FROM enrollments e
+         JOIN grades g ON g.enrollment_id = e.id
+         WHERE e.student_id = ?
+           AND g.grade IS NOT NULL
+           AND g.grade <> ''"
+    );
     $stmt->execute([$student_id]);
     $grades = $stmt->fetchAll(PDO::FETCH_COLUMN);
     if (!$grades) return null;
