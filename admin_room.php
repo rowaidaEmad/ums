@@ -1,3 +1,4 @@
+
 <?php
 require_once 'auth.php';
 require_role('admin');
@@ -9,17 +10,19 @@ $errors = [];
 $success = null;
 
 /* Load courses for dropdown and summary */
-$courses = $pdo->query('SELECT id, code, title, room FROM courses ORDER BY code')
-               ->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $courses = $pdo->query('SELECT id, code, title, room FROM courses ORDER BY code')
+        ->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $courses = [];
+    $errors[] = 'Failed to load courses: ' . htmlspecialchars($e->getMessage());
+}
 
 /* ===========================================================
-   NEW PART (Manual time-based scheduling, unified form)
-   - No auto slots.
-   - Week = Saturday → Thursday only (Friday blocked).
-   - Hours = 08:00..20:00 (1-hour slots).
-   - DB UNIQUE keys enforce: room/time and course/time conflicts.
+   Settings:
+   - Week = Saturday → Thursday (Friday blocked).
+   - Hours = 08:00..20:00 (1-hour slots; start in 08..19).
    =========================================================== */
-
 function is_friday(string $date): bool {
     $d = new DateTimeImmutable($date);
     return $d->format('D') === 'Fri';
@@ -31,7 +34,65 @@ function is_hour_in_range(string $time): bool {
     return $m === 0 && $h >= 8 && $h <= 19; // 19 → 20 end
 }
 
-/* Create booking from unified form */
+/** ==========================================================
+ *  EAV helpers: create booking, conflict checks
+ *  ========================================================== */
+function create_booking(PDO $pdo, array $payload): int {
+    // payload keys:
+    //  slot_date 'YYYY-MM-DD', start_time 'HH:MM:SS', end_time 'HH:MM:SS'
+    //  room_number (int), course_id (int), optional section_id (int|null)
+
+    // 1) Create booking entity
+    $pdo->exec("INSERT INTO entities (entity_type) VALUES ('room_schedule')");
+    $bookingId = (int)$pdo->lastInsertId();
+
+    // 2) Helper to set an attribute value
+    $set = function(string $name, string $type, $value) use ($pdo, $bookingId) {
+        $stmtAttr = $pdo->prepare("SELECT id FROM eav_attributes WHERE entity_type='room_schedule' AND name=? LIMIT 1");
+        $stmtAttr->execute([$name]);
+        $attrId = (int)$stmtAttr->fetchColumn();
+        if (!$attrId) throw new RuntimeException("Attribute '$name' not found for room_schedule.");
+
+        if ($type === 'string') {
+            $stmt = $pdo->prepare("INSERT INTO eav_values (entity_id, attribute_id, value_string) VALUES (?, ?, ?)");
+        } else { // int
+            $stmt = $pdo->prepare("INSERT INTO eav_values (entity_id, attribute_id, value_int) VALUES (?, ?, ?)");
+        }
+        $stmt->execute([$bookingId, $attrId, $value]);
+    };
+
+    // 3) Set attributes
+    $set('slot_date',   'string', $payload['slot_date']);
+    $set('start_time',  'string', $payload['start_time']);
+    $set('end_time',    'string', $payload['end_time']);
+    $set('room_number', 'int',    (int)$payload['room_number']);
+    $set('course_id',   'int',    (int)$payload['course_id']);
+    if (isset($payload['section_id']) && $payload['section_id'] !== null && $payload['section_id'] !== '') {
+        $set('section_id','int', (int)$payload['section_id']);
+    }
+
+    return $bookingId;
+}
+
+function has_room_conflict(PDO $pdo, string $date, string $start, int $room): bool {
+    $q = $pdo->prepare("
+        SELECT COUNT(*) FROM room_schedule_v
+        WHERE slot_date=? AND start_time=? AND room_number=?");
+    $q->execute([$date, $start, $room]);
+    return (int)$q->fetchColumn() > 0;
+}
+
+function has_course_conflict(PDO $pdo, string $date, string $start, int $courseId): bool {
+    $q = $pdo->prepare("
+        SELECT COUNT(*) FROM room_schedule_v
+        WHERE slot_date=? AND start_time=? AND course_id=?");
+    $q->execute([$date, $start, $courseId]);
+    return (int)$q->fetchColumn() > 0;
+}
+
+/* ==========================================================
+   Create booking from unified form
+   ========================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_slot') {
     $slot_date   = trim($_POST['slot_date'] ?? '');
     $start_time  = trim($_POST['start_time'] ?? '');
@@ -39,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     $course_id   = (int)($_POST['course_id'] ?? 0);
     $set_default = isset($_POST['set_default_room']) ? 1 : 0;
 
+    // Basic validation
     if ($slot_date === '' || $start_time === '' || !$room_number || !$course_id) {
         $errors[] = 'All fields are required.';
     } elseif (is_friday($slot_date)) {
@@ -58,19 +120,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         if (!$chk->fetch()) $errors[] = 'Selected course does not exist.';
     }
 
+    // Compute end_time and conflicts
     if (empty($errors)) {
         $end_time = DateTimeImmutable::createFromFormat('H:i', substr($start_time,0,5))
-                    ->modify('+1 hour')->format('H:i:00');
+            ->modify('+1 hour')->format('H:i:00');
 
+        // Conflicts via the view (mimic old unique keys)
+        if (has_room_conflict($pdo, $slot_date, $start_time, $room_number)) {
+            $errors[] = 'This room is already booked at that time.';
+        }
+        if (has_course_conflict($pdo, $slot_date, $start_time, $course_id)) {
+            $errors[] = 'This course is already booked at that time.';
+        }
+
+        // Optional: ensure 1-hour duration
+        $startDT = DateTimeImmutable::createFromFormat('H:i:s', $start_time);
+        $endDT   = DateTimeImmutable::createFromFormat('H:i:s', $end_time);
+        if (!$startDT || !$endDT || $startDT->modify('+1 hour')->format('H:i:s') !== $end_time) {
+            $errors[] = 'Slot must be exactly 1 hour.';
+        }
+    }
+
+    // EAV create
+    if (empty($errors)) {
         try {
             $pdo->beginTransaction();
 
-            // Insert booking
-            $ins = $pdo->prepare('
-                INSERT INTO room_schedule (slot_date, start_time, end_time, room_number, course_id)
-                VALUES (?, ?, ?, ?, ?)
-            ');
-            $ins->execute([$slot_date, $start_time, $end_time, $room_number, $course_id]);
+            $payload = [
+                'slot_date'   => $slot_date,
+                'start_time'  => $start_time,
+                'end_time'    => $end_time,
+                'room_number' => $room_number,
+                'course_id'   => $course_id,
+                'section_id'  => null, // extend if you later schedule per section
+            ];
+            $bookingId = create_booking($pdo, $payload);
 
             // Optional: also set the course's default room attribute
             if ($set_default) {
@@ -81,28 +165,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $success = 'Slot added successfully.';
         } catch (Throwable $t) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $msg = $t->getMessage();
-            if (strpos($msg, 'uq_room_slot') !== false) {
-                $errors[] = 'This room is already booked at that time.';
-            } elseif (strpos($msg, 'uq_course_slot') !== false) {
-                $errors[] = 'This course is already booked at that time.';
-            } else {
-                $errors[] = 'Error: ' . $msg;
-            }
+            $errors[] = 'Error: ' . htmlspecialchars($t->getMessage());
         }
     }
 }
 
-/* Delete a booking from the grid */
+/* ==========================================================
+   Delete a booking from the grid
+   ========================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_slot') {
     $id = (int)($_POST['id'] ?? 0);
     if ($id) {
-        $pdo->prepare('DELETE FROM room_schedule WHERE id = ?')->execute([$id]);
-        $success = 'Slot removed.';
+        try {
+            // Delete the booking entity (cascade removes its eav_values)
+            $stmt = $pdo->prepare("DELETE FROM entities WHERE id = ? AND entity_type='room_schedule'");
+            $stmt->execute([$id]);
+            $success = 'Slot removed.';
+        } catch (Throwable $t) {
+            $errors[] = 'Error removing slot: ' . htmlspecialchars($t->getMessage());
+        }
     }
 }
 
-/* Week selection: default to nearest Saturday */
+/* ==========================================================
+   Week selection: default to nearest Saturday
+   ========================================================== */
 $weekStartParam = $_GET['week'] ?? '';
 if ($weekStartParam === '') {
     $today = new DateTimeImmutable('today');
@@ -112,30 +199,37 @@ if ($weekStartParam === '') {
 } else {
     $weekStart = new DateTimeImmutable($weekStartParam);
 }
+
 $prevWeek = $weekStart->modify('-7 days')->format('Y-m-d');
 $nextWeek = $weekStart->modify('+7 days')->format('Y-m-d');
 
 $days = [];
 for ($i=0; $i<7; $i++) $days[] = $weekStart->modify("+{$i} day");
 
-/* Fetch booked slots for the selected week (Sat→Thu) */
+/* ==========================================================
+   Fetch booked slots for the selected week (Sat→Thu)
+   ========================================================== */
 $bookings = []; // [date][start_time] => list of bookings
-$stmt = $pdo->prepare('
-    SELECT s.*, c.code AS course_code, c.title AS course_title
-    FROM room_schedule s
-    LEFT JOIN courses c ON c.id = s.course_id
-    WHERE slot_date BETWEEN ? AND ?
-      AND DATE_FORMAT(slot_date, "%a") <> "Fri"
-    ORDER BY slot_date, start_time, room_number
-');
-$stmt->execute([$days[0]->format('Y-m-d'), $days[6]->format('Y-m-d')]);
-foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $b) {
-    $bookings[$b['slot_date']][$b['start_time']][] = $b;
+
+try {
+    $stmt = $pdo->prepare('
+      SELECT id, slot_date, start_time, end_time, room_number,
+             course_id, course_code, course_title, section_id
+      FROM room_schedule_v
+      WHERE slot_date BETWEEN ? AND ?
+        AND DATE_FORMAT(slot_date, "%a") <> "Fri"
+      ORDER BY slot_date, start_time, room_number
+    ');
+    $stmt->execute([$days[0]->format('Y-m-d'), $days[6]->format('Y-m-d')]);
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $b) {
+        $bookings[$b['slot_date']][$b['start_time']][] = $b;
+    }
+} catch (Throwable $e) {
+    $errors[] = 'Failed to load schedule: ' . htmlspecialchars($e->getMessage());
 }
 
 include 'header.php';
 ?>
-
 <div class="container my-3">
   <h3>Room Scheduling</h3>
 
@@ -191,12 +285,12 @@ include 'header.php';
       </div>
 
       <?php
-        // Bound the date input to the current week (Sat..Thu)
-        $weekMin = $days[0]->format('Y-m-d');
-        $weekMax = $days[6]->format('Y-m-d');
-        // If weekMin is Friday (edge cases), shift to Saturday
-        if ((new DateTimeImmutable($weekMin))->format('D') === 'Fri') $weekMin = $days[1]->format('Y-m-d');
-        if ((new DateTimeImmutable($weekMax))->format('D') === 'Fri') $weekMax = $days[5]->format('Y-m-d');
+      // Bound the date input to the current week (Sat..Thu)
+      $weekMin = $days[0]->format('Y-m-d');
+      $weekMax = $days[6]->format('Y-m-d');
+      // If weekMin/Max is Friday (edge cases), shift
+      if ((new DateTimeImmutable($weekMin))->format('D') === 'Fri') $weekMin = $days[1]->format('Y-m-d');
+      if ((new DateTimeImmutable($weekMax))->format('D') === 'Fri') $weekMax = $days[5]->format('Y-m-d');
       ?>
 
       <div class="col-md-3">
@@ -243,15 +337,13 @@ include 'header.php';
     </thead>
     <tbody>
       <?php foreach ($days as $d):
-          if ($d->format('D') === 'Fri') continue;
-          $dayStr = $d->format('Y-m-d');
-      ?>
+        if ($d->format('D') === 'Fri') continue;
+        $dayStr = $d->format('Y-m-d'); ?>
         <tr>
           <th><?= $d->format('D') ?> <small class="text-muted">(<?= $dayStr ?>)</small></th>
           <?php for ($h=8; $h<20; $h++):
-              $st = sprintf('%02d:00:00', $h);
-              $cell = $bookings[$dayStr][$st] ?? [];
-          ?>
+            $st = sprintf('%02d:00:00', $h);
+            $cell = $bookings[$dayStr][$st] ?? []; ?>
             <td data-date="<?= htmlspecialchars($dayStr) ?>" data-time="<?= htmlspecialchars($st) ?>">
               <?php if (empty($cell)): ?>
                 <span class="text-muted">—</span>
@@ -264,7 +356,7 @@ include 'header.php';
                   <form method="post" onsubmit="return confirm('Remove this slot?');">
                     <input type="hidden" name="action" value="delete_slot">
                     <input type="hidden" name="id" value="<?= (int)$b['id'] ?>">
-                    <button class="btn btn-sm btn-outline-danger">Delete</button>
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                   </form>
                 </div>
               <?php endforeach; endif; ?>
@@ -279,7 +371,6 @@ include 'header.php';
     <a href="admin_dashboard.php" class="btn btn-secondary">Back to Dashboard</a>
   </div>
 </div>
-
 <?php include 'footer.php'; ?>
 
 <!-- Small script: clicking an empty cell prefills date/time in the unified form -->
@@ -288,16 +379,13 @@ include 'header.php';
   const table = document.getElementById('weekTable');
   const dateInput = document.getElementById('slotDate');
   const timeSelect = document.getElementById('startTime');
-
   if (table && dateInput && timeSelect) {
     table.addEventListener('click', function (e) {
       const td = e.target.closest('td[data-date][data-time]');
       if (!td) return;
-
       // If the cell shows an existing booking, do nothing
       const hasBooking = td.querySelector('.badge');
       if (hasBooking) return;
-
       // Prefill the form with this day/time
       dateInput.value = td.getAttribute('data-date');
       timeSelect.value = td.getAttribute('data-time');
