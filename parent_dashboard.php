@@ -3,7 +3,7 @@ require_once 'auth.php';
 require_role('parent');
 require_once 'eav.php';
 require_once 'db.php';
-
+$pdo = getDB();
 $parent_id = (int)$_SESSION['user']['id'];
 $students = eav_get_linked_students($parent_id);
 
@@ -17,10 +17,53 @@ foreach ($students as $s) {
     if ((int)$s['id'] === $selected_student_id) { $selected_student = $s; break; }
 }
 
-$avg = null;
+$gpa = null;
+
 if ($selected_student) {
-    $avg = eav_student_current_average((int)$selected_student['id']);
+    $stmt = $pdo->prepare("
+        SELECT c.credit_hours,
+               eav_total.value_int AS total
+        FROM enrollments e
+        JOIN courses c ON c.id = e.course_id
+        LEFT JOIN eav_values eav_total
+          ON eav_total.entity_id = e.id
+         AND eav_total.attribute_id = (
+            SELECT id FROM eav_attributes
+            WHERE entity_type='enrollment' AND name='total'
+         )
+        WHERE e.student_id = ?
+    ");
+    $stmt->execute([(int)$selected_student['id']]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $totalPoints = 0;
+    $totalCredits = 0;
+
+    foreach ($rows as $r) {
+        if ($r['total'] === null || !$r['credit_hours']) continue;
+
+        $t = (int)$r['total'];
+        $credits = (int)$r['credit_hours'];
+
+        if ($t >= 90) $gp = 4.0;
+        elseif ($t >= 85) $gp = 3.7;
+        elseif ($t >= 80) $gp = 3.3;
+        elseif ($t >= 75) $gp = 3.0;
+        elseif ($t >= 70) $gp = 2.7;
+        elseif ($t >= 65) $gp = 2.3;
+        elseif ($t >= 60) $gp = 2.0;
+        elseif ($t >= 50) $gp = 1.0;
+        else $gp = 0;
+
+        $totalPoints += $gp * $credits;
+        $totalCredits += $credits;
+    }
+
+    if ($totalCredits > 0) {
+        $gpa = round($totalPoints / $totalCredits, 2);
+    }
 }
+
 
 // Grades snapshot: include midterm, activities, final, and letter grade
 $grades = [];
@@ -77,8 +120,9 @@ if ($selected_student) {
           <p class="mb-1"><strong>Student ID:</strong> <?= (int)$selected_student['id'] ?></p>
           <p class="mb-1"><strong>Major/Program:</strong> <?= htmlspecialchars($selected_student['program'] ?? '-') ?></p>
           <p class="mb-1"><strong>Level/Year:</strong> <?= htmlspecialchars($selected_student['level'] ?? '-') ?></p>
-          <p class="mb-0"><strong>Current Average:</strong>
-            <?= ($avg===null ? '-' : number_format($avg, 2) . '%') ?>
+          <p class="mb-0">
+            <strong>Current GPA:</strong>
+            <?= $gpa === null ? '-' : $gpa . ' / 4.00' ?>
           </p>
         <?php endif; ?>
       </div>
@@ -136,6 +180,5 @@ if ($selected_student) {
     </div>
   </div>
 </div>
-
 
 <?php include 'footer.php'; ?>
