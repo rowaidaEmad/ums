@@ -443,3 +443,43 @@ SELECT
 FROM room_schedule s
 LEFT JOIN courses c ON c.id = s.course_id
 ORDER BY s.slot_date, s.start_time, s.room_number;
+
+
+-- ===== Announcements (EAV attributes) =====
+
+/* 1) Allow 'announcement' in the entity_type ENUMs */
+ALTER TABLE entities
+  MODIFY entity_type ENUM('user','course','section','enrollment','parent_link','request','announcement') NOT NULL;
+
+ALTER TABLE eav_attributes
+  MODIFY entity_type ENUM('user','course','section','enrollment','parent_link','request','announcement') NOT NULL;
+
+-- Entity type: 'announcement'
+INSERT INTO eav_attributes (entity_type, name, data_type) VALUES
+('announcement','title','string'),
+('announcement','message','text'),
+('announcement','audience','string'),   -- 'students', 'parents', 'all'
+('announcement','created_by','int');    -- user.id of admin
+
+-- View: announcements (read-only convenience)
+CREATE OR REPLACE VIEW announcements AS
+SELECT
+  e.id,
+  MAX(CASE WHEN a.name='title'       THEN v.value_string END) AS title,
+  MAX(CASE WHEN a.name='message'     THEN v.value_text   END) AS message,
+  MAX(CASE WHEN a.name='audience'    THEN v.value_string END) AS audience,
+  MAX(CASE WHEN a.name='created_by'  THEN v.value_int    END) AS created_by,
+  e.created_at
+FROM entities e
+LEFT JOIN eav_values v ON v.entity_id = e.id
+LEFT JOIN eav_attributes a ON a.id = v.attribute_id AND a.entity_type='announcement'
+WHERE e.entity_type='announcement'
+GROUP BY e.id, e.created_at;
+
+
+INSERT IGNORE INTO eav_attributes (entity_type, name, data_type) VALUES
+('announcement','title','string'),
+('announcement','message','text'),
+('announcement','audience','string'),
+('announcement','created_by','int');
+

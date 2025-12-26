@@ -45,7 +45,43 @@ require_role('student');
         <div style="font-weight:bold; font-size:16px;">View My Courses/Grades</div>
     </a>
 
+
+    <!-- Messages Card -->
+    <a href="student_messages.php" style="
+        display: block;
+        width: 200px;
+        padding: 20px;
+        text-align: center;
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #17a2b8, #17a2b8);
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+    " onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';"
+      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)';">
+        <h5>Messages</h5>
+        <p style="margin: 0;">Message your professors</p>
+    </a>
+    
+    <!-- Announcements Card -->
+    <a href="student_announcements.php" style="
+        display: block;
+        width: 200px;
+        padding: 20px;
+        text-align: center;
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #4671dcff, #434ec7ff); /* amber tone */
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: transform 0.2s, box-shadow 0.2s;"
+      onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';"
+      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)';">
+      <div style="font-weight:bold; font-size:16px;">Announcements</div>
+      <p style="margin: 0; font-size: 12px; opacity: .95;">Latest updates & notices</p>
+    </a>
+
 </div>
 
 <?php include 'footer.php'; ?>
-
