@@ -22,6 +22,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     $professor_id = $_POST['professor_id'] !== '' ? (int)$_POST['professor_id'] : null;
     $is_core = isset($_POST['is_core']) ? 1 : 0;
     $must_level = trim($_POST['must_level'] ?? '');
+    $credit_hours = (int)($_POST['credit_hours'] ?? 0);
+
+    if ($credit_hours < 2 || $credit_hours > 5) {
+        $errors[] = "Credit hours must be between 2 and 5.";
+    }
+
 
     // Handle prerequisites: could be posted as array (multi-select) or single comma-separated string
     if (isset($_POST['prerequisites']) && is_array($_POST['prerequisites'])) {
@@ -78,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             eav_set($courseId, 'course', 'is_core', (int)$is_core);
             if ($prerequisites !== '') eav_set($courseId, 'course', 'prerequisites', $prerequisites);
             if ($must_level !== '') eav_set($courseId, 'course', 'must_level', $must_level);
-
+            eav_set($courseId, 'course', 'credit_hours', $credit_hours);
             $pdo->commit();
         } catch (Throwable $t) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -145,6 +151,19 @@ $courses = $pdo->query(
                 <input name="title" class="form-control" required>
             </div>
             <div class="mb-3">
+                <label class="form-label">Credit Hours</label>
+                <input
+                    type="number"
+                    name="credit_hours"
+                    class="form-control"
+                    min="2"
+                    max="5"
+                    required
+                >
+                <small class="text-muted">Must be between 2 and 5</small>
+            </div>
+
+            <div class="mb-3">
                 <label class="form-label">Description</label>
                 <textarea name="description" class="form-control" rows="3"></textarea>
             </div>
@@ -201,6 +220,7 @@ $courses = $pdo->query(
                 <tr>
                     <th>Code</th>
                     <th>Title</th>
+                    <th>Credits</th>
                     <th>Professor</th>
                     <th>Core</th>
                     <th>Prerequisites</th>
@@ -213,6 +233,7 @@ $courses = $pdo->query(
                 <tr>
                     <td><?= htmlspecialchars($c['code'] ?? '—') ?></td>
                     <td><?= htmlspecialchars($c['title'] ?? '—') ?></td>
+                    <td><?= htmlspecialchars($c['credit_hours'] ?? '—') ?></td>
                     <td><?= htmlspecialchars($c['professor_name'] ?? '—') ?></td>
                     <td><?= ($c['is_core'] ?? 0) ? 'Yes' : 'No' ?></td>
                     <td><?= htmlspecialchars($c['prerequisites'] ?? '—') ?></td>
