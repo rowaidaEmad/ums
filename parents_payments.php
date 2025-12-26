@@ -4,10 +4,68 @@ require_role('parent');
 require_once 'eav.php';
 require_once 'db.php';
 
+/* ================================
+   Fee calculation functions
+   ================================ */
+
+/**
+ * Get total registered credit hours for a student (EAV-safe)
+ */
+
+function get_student_total_credits(int $student_id): int
+{
+    $pdo = eav_db();
+
+    $stmt = $pdo->prepare("
+        SELECT SUM(ev_ch.value_int) AS total_credits
+        FROM entities e
+        -- enrollment.student_id
+        JOIN eav_values ev_sid ON ev_sid.entity_id = e.id
+        JOIN eav_attributes a_sid ON a_sid.id = ev_sid.attribute_id
+
+        -- enrollment.course_id
+        JOIN eav_values ev_cid ON ev_cid.entity_id = e.id
+        JOIN eav_attributes a_cid ON a_cid.id = ev_cid.attribute_id
+
+        -- course.credit_hours
+        JOIN entities c ON c.id = ev_cid.value_int
+        JOIN eav_values ev_ch ON ev_ch.entity_id = c.id
+        JOIN eav_attributes a_ch ON a_ch.id = ev_ch.attribute_id
+
+        WHERE e.entity_type = 'enrollment'
+          AND a_sid.entity_type = 'enrollment'
+          AND a_sid.name = 'student_id'
+          AND ev_sid.value_int = ?
+
+          AND a_cid.entity_type = 'enrollment'
+          AND a_cid.name = 'course_id'
+
+          AND a_ch.entity_type = 'course'
+          AND a_ch.name = 'credit_hours'
+    ");
+
+    $stmt->execute([$student_id]);
+    return (int)($stmt->fetchColumn() ?? 0);
+}
+
+/**
+ * Calculate total fees for a student
+ */
+function calculate_student_fees(int $student_id): int
+{
+    $price = (int)(eav_get(1, 'user', 'credit_hour_price') ?? 0);
+    $credits = get_student_total_credits($student_id);
+
+    return $credits * $price;
+}
+
+/* ================================
+   Parent & student selection
+   ================================ */
+
 $parent_id = (int)$_SESSION['user']['id'];
 $students = eav_get_linked_students($parent_id);
 
-// Determine selected student
 $selected_student_id = (int)($_GET['student_id'] ?? 0);
 if ($selected_student_id === 0 && !empty($students)) {
     $selected_student_id = (int)$students[0]['id'];
@@ -21,87 +79,39 @@ foreach ($students as $s) {
     }
 }
 
-$pdo = getDB();
-$credit_hour_price = eav_get(ADMIN_ID, 'user', 'credit_hour_price');
-
-function calculate_student_fees(int $student_id, int $credit_hour_price, PDO $pdo): array {
-    // Total credits
-    $stmt = $pdo->prepare("
-        SELECT SUM(c.credit_hours) as total_credits
-        FROM enrollments e
-        JOIN courses c ON c.id = e.course_id
-        WHERE e.student_id = ?
-    ");
-    $stmt->execute([$student_id]);
-    $total_credits = (int)($stmt->fetchColumn() ?? 0);
-    $total_fees = $total_credits * $credit_hour_price;
-
-    // Total paid
-    $stmt_paid = $pdo->prepare("
-        SELECT SUM(amount) as paid
-        FROM payments
-        WHERE student_id = ? AND parent_id = ?
-    ");
-    $stmt_paid->execute([$student_id, $_SESSION['user']['id']]);
-    $paid = (int)($stmt_paid->fetchColumn() ?? 0);
-
-    return [
-        'credits' => $total_credits,
-        'total_fees' => $total_fees,
-        'paid' => $paid,
-        'due' => max(0, $total_fees - $paid)
-    ];
-}
-
-// Handle payment submission
-$success = '';
-$error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $amount = (int)($_POST['amount'] ?? 0);
-    if ($amount <= 0) {
-        $error = "Payment must be greater than 0.";
-    } else {
-        $stmt = $pdo->prepare("INSERT INTO payments (student_id, parent_id, amount, payment_date) VALUES (?, ?, ?, NOW())");
-        $stmt->execute([$selected_student_id, $parent_id, $amount]);
-        $success = "Payment recorded successfully.";
-    }
-}
+/* ================================
+   Page rendering
+   ================================ */
 
 include 'header.php';
 ?>
 
-<h3>Payments for <?= htmlspecialchars($selected_student['name'] ?? 'Student') ?></h3>
+<h3>Payments</h3>
 
-<?php if ($success): ?>
-    <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
-<?php endif; ?>
-<?php if ($error): ?>
-    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
-<?php endif; ?>
-
-<?php if ($selected_student): 
-    $fees = calculate_student_fees($selected_student_id, $credit_hour_price, $pdo);
-?>
-<div class="card p-3 mb-3" style="max-width:600px;">
-    <p><strong>Total Credits:</strong> <?= $fees['credits'] ?></p>
-    <p><strong>Price per Credit:</strong> <?= number_format($credit_hour_price) ?> EGP</p>
-    <p><strong>Total Fees:</strong> <?= number_format($fees['total_fees']) ?> EGP</p>
-    <p><strong>Paid:</strong> <?= number_format($fees['paid']) ?> EGP</p>
-    <p><strong>Due:</strong> <?= number_format($fees['due']) ?> EGP</p>
-
-    <?php if ($fees['due'] > 0): ?>
-        <form method="post" class="d-flex gap-2 mt-2">
-            <input type="number" name="amount" class="form-control form-control-sm" min="1" max="<?= $fees['due'] ?>" placeholder="Amount" required>
-            <button class="btn btn-success btn-sm">Pay</button>
-        </form>
-    <?php else: ?>
-        <div class="text-success mt-2">All fees are paid.</div>
-    <?php endif; ?>
-</div>
-<?php else: ?>
+<?php if (!$selected_student): ?>
     <div class="alert alert-warning">No student selected.</div>
+    <a href="parent_dashboard.php" class="btn btn-secondary">Back</a>
+    <?php include 'footer.php'; exit; ?>
 <?php endif; ?>
 
-<a href="parent_dashboard.php" class="btn btn-secondary mt-2">Back</a>
+<?php
+$total_credits = get_student_total_credits($selected_student_id);
+$total_fees = calculate_student_fees($selected_student_id);
+$price = (int)(eav_get(1, 'user', 'credit_hour_price') ?? 0);
+?>
+
+<div class="card p-3 mb-3" style="max-width:600px;">
+    <h5 class="mb-3"><?= htmlspecialchars($selected_student['name']) ?></h5>
+
+    <p><strong>Total Credits:</strong> <?= $total_credits ?></p>
+    <p><strong>Price per Credit:</strong> <?= number_format($price) ?> EGP</p>
+    <p><strong>Total Fees:</strong> <?= number_format($total_fees) ?> EGP</p>
+
+</div>
+
+<a href="parent_dashboard.php?student_id=<?= (int)$selected_student_id ?>"
+   class="btn btn-secondary mt-2">
+   Back
+</a>
 
 <?php include 'footer.php'; ?>

@@ -119,7 +119,7 @@ require_role('admin');
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     ">
         <div style="font-size:40px;">💰</div>
-        <div style="font-weight:bold;">Credit Price</div>
+        <div style="font-weight:bold;">Fees & Payments</div>
     </a>
 
 </div>

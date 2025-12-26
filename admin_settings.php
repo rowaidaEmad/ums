@@ -10,33 +10,72 @@ $success = '';
 $error = '';
 
 /**
- * Calculate the total fees for a student using EAV
+ * Calculate the total fees for a student using PURE EAV
  */
-function calculate_student_fees(int $student_id): ?int {
+function calculate_student_fees(int $student_id): int {
     $pdo = eav_db();
 
-    // Fetch admin's credit hour price
-    $price_per_credit = eav_get(ADMIN_ID, 'user', 'credit_hour_price');
-    if ($price_per_credit === null) return null;
+    // Get admin credit hour price
+    $price_per_credit = (int) eav_get(ADMIN_ID, 'user', 'credit_hour_price');
+    if ($price_per_credit <= 0) {
+        return 0;
+    }
 
-    // Fetch total credits from enrollments using EAV
     $stmt = $pdo->prepare("
-        SELECT SUM(c.value_int) AS total_credits
+        SELECT SUM(ch.value_int) AS total_credits
         FROM entities e
-        JOIN eav_values ev_enr ON ev_enr.entity_id = e.id
-        JOIN eav_attributes a_enr ON a_enr.id = ev_enr.attribute_id
-        JOIN entities c_ent ON c_ent.id = ev_enr.value_int
-        JOIN eav_values c ON c.entity_id = c_ent.id
-        JOIN eav_attributes a ON a.id = c.attribute_id
-        WHERE e.entity_type = 'enrollment'
-          AND a_enr.entity_type='enrollment' AND a_enr.name='student_id' AND ev_enr.value_int = ?
-          AND a.entity_type='course' AND a.name='credit_hours'
-    ");
-    $stmt->execute([$student_id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    $total_credits = (int)($row['total_credits'] ?? 0);
+        -- enrollment.student_id
+        JOIN eav_values es ON es.entity_id = e.id
+        JOIN eav_attributes asid ON asid.id = es.attribute_id
+            AND asid.entity_type = 'enrollment'
+            AND asid.name = 'student_id'
 
-    return $total_credits * (int)$price_per_credit;
+        -- enrollment.course_id
+        JOIN eav_values ec ON ec.entity_id = e.id
+        JOIN eav_attributes acid ON acid.id = ec.attribute_id
+            AND acid.entity_type = 'enrollment'
+            AND acid.name = 'course_id'
+
+        -- course.credit_hours
+        JOIN eav_values ch ON ch.entity_id = ec.value_int
+        JOIN eav_attributes ach ON ach.id = ch.attribute_id
+            AND ach.entity_type = 'course'
+            AND ach.name = 'credit_hours'
+
+        WHERE e.entity_type = 'enrollment'
+          AND es.value_int = ?
+    ");
+
+    $stmt->execute([$student_id]);
+    $total_credits = (int) ($stmt->fetchColumn() ?? 0);
+
+    return $total_credits * $price_per_credit;
+}
+
+/**
+ * Get total registered credit hours for a student (PURE EAV)
+ */
+function get_student_total_credits(int $student_id): int {
+    $pdo = eav_db();
+
+    $stmt = $pdo->prepare("
+        SELECT SUM(ch.value_int) AS total_credits
+        FROM entities e
+        JOIN eav_values es ON es.entity_id = e.id
+        JOIN eav_attributes asid ON asid.id = es.attribute_id
+            AND asid.entity_type='enrollment' AND asid.name='student_id'
+        JOIN eav_values ec ON ec.entity_id = e.id
+        JOIN eav_attributes acid ON acid.id = ec.attribute_id
+            AND acid.entity_type='enrollment' AND acid.name='course_id'
+        JOIN eav_values ch ON ch.entity_id = ec.value_int
+        JOIN eav_attributes ach ON ach.id = ch.attribute_id
+            AND ach.entity_type='course' AND ach.name='credit_hours'
+        WHERE e.entity_type='enrollment'
+          AND es.value_int = ?
+    ");
+
+    $stmt->execute([$student_id]);
+    return (int) ($stmt->fetchColumn() ?? 0);
 }
 
 // Handle price update
@@ -80,6 +119,7 @@ include 'header.php';
 </form>
 
 <h4>Student Fees</h4>
+
 <table class="table table-striped">
     <thead>
         <tr>
@@ -90,37 +130,25 @@ include 'header.php';
     </thead>
     <tbody>
         <?php
-        $students = eav_list_users_by_role('student'); // fetch all students
+        // Fetch all students via EAV helper
+        $students = eav_list_users_by_role('student');
 
         foreach ($students as $student):
-            $total_fees = calculate_student_fees((int)$student['id']);
+            $student_id = (int)$student['id'];
 
-            // Optionally compute total credits separately
-            $pdo = eav_db();
-            $stmt_credits = $pdo->prepare("
-                SELECT SUM(c.value_int) AS total_credits
-                FROM entities e
-                JOIN eav_values ev_enr ON ev_enr.entity_id = e.id
-                JOIN eav_attributes a_enr ON a_enr.id = ev_enr.attribute_id
-                JOIN entities c_ent ON c_ent.id = ev_enr.value_int
-                JOIN eav_values c ON c.entity_id = c_ent.id
-                JOIN eav_attributes a ON a.id = c.attribute_id
-                WHERE e.entity_type = 'enrollment'
-                  AND a_enr.entity_type='enrollment' AND a_enr.name='student_id' AND ev_enr.value_int = ?
-                  AND a.entity_type='course' AND a.name='credit_hours'
-            ");
-            $stmt_credits->execute([$student['id']]);
-            $credits_row = $stmt_credits->fetch(PDO::FETCH_ASSOC);
-            $total_credits = (int)($credits_row['total_credits'] ?? 0);
+            // NEW clean logic
+            $total_credits = get_student_total_credits($student_id);
+            $total_fees    = calculate_student_fees($student_id);
         ?>
             <tr>
                 <td><?= htmlspecialchars($student['name']) ?></td>
-                <td><?= htmlspecialchars($total_credits) ?></td>
-                <td><?= htmlspecialchars($total_fees ?? 0) ?></td>
+                <td><?= $total_credits ?></td>
+                <td><?= number_format($total_fees ?? 0) ?></td>
             </tr>
         <?php endforeach; ?>
     </tbody>
 </table>
+
 
 <a href="admin_dashboard.php" class="btn btn-secondary mt-3">Back</a>
 
