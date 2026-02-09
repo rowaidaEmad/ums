@@ -223,8 +223,8 @@ Example:
 
 | entity_id | attribute | value |
 |----------|----------|------|
-| 1        | name     | Ahmed |
-| 1        | email    | ahmed@ums.edu |
+| 1        | name     | Rowaida |
+| 1        | email    | rowaida@ums.edu |
 
 ---
 
